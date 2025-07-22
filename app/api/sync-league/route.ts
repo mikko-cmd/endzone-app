@@ -1,65 +1,80 @@
+/*
+  SQL for Supabase Table Migration:
+  Run these commands in your Supabase SQL editor.
+
+  -- 1. Add the new columns to your 'leagues' table.
+  ALTER TABLE leagues ADD COLUMN league_name TEXT;
+  ALTER TABLE leagues ADD COLUMN last_synced_at TIMESTAMPTZ;
+
+  -- 2. Make sure the 'id' column (storing sleeper_league_id) is the primary key.
+  --    If not, you might need to run:
+  --    ALTER TABLE leagues ADD PRIMARY KEY (id);
+
+  -- 3. Backfill the user_email for existing rows if necessary.
+  --    Replace 'example_user_email@domain.com' with the actual user's email.
+  --    UPDATE leagues SET user_email = 'example_user_email@domain.com' WHERE user_email IS NULL;
+*/
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// Zod schema for request body validation
+const syncLeagueSchema = z.object({
+  sleeper_league_id: z.string().nonempty(),
+  user_email: z.string().email(),
+});
 
 export async function POST(request: Request) {
-  // Next.js App Router handles method validation. Only POST requests will reach this function.
-  // A request with a different method will automatically receive a 405 response.
-  
   try {
-    const { leagueId, userEmail } = await request.json();
+    // 1. Validate request body
+    const body = await request.json();
+    console.log('Incoming request to /api/sync-league:', body);
 
-    if (!leagueId || !userEmail) {
-      return NextResponse.json({ success: false, error: 'Missing leagueId or userEmail' }, { status: 400 });
+    const validation = syncLeagueSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ success: false, error: 'Invalid request body', details: validation.error.flatten() }, { status: 400 });
     }
+    const { sleeper_league_id, user_email } = validation.data;
 
-    // Fetch all required data from the Sleeper API in parallel
-    const [leagueRes, rostersRes, usersRes] = await Promise.all([
-      fetch(`https://api.sleeper.app/v1/league/${leagueId}`),
-      fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
-      fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`),
-    ]);
+    // 2. Fetch league metadata from Sleeper API
+    console.log(`Fetching league data for ID: ${sleeper_league_id}`);
+    const sleeperRes = await fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}`);
 
-    // Validate the API responses
-    if (!leagueRes.ok) {
-      return NextResponse.json({ success: false, error: 'Failed to fetch league data from Sleeper.' }, { status: leagueRes.status });
+    if (!sleeperRes.ok) {
+      const errorData = await sleeperRes.json();
+      console.error('Failed to fetch league data from Sleeper:', errorData);
+      return NextResponse.json({ success: false, error: 'Failed to fetch league data from Sleeper.' }, { status: sleeperRes.status });
     }
-    if (!rostersRes.ok) {
-        return NextResponse.json({ success: false, error: 'Failed to fetch rosters data from Sleeper.' }, { status: rostersRes.status });
-    }
-    if (!usersRes.ok) {
-        return NextResponse.json({ success: false, error: 'Failed to fetch users data from Sleeper.' }, { status: usersRes.status });
-    }
-    
-    const leagueData = await leagueRes.json();
-    const rostersData = await rostersRes.json();
-    const usersData = await usersRes.json();
+    const sleeperLeagueData = await sleeperRes.json();
+    console.log('Successfully fetched league data:', sleeperLeagueData);
 
-    // Create a map for quick lookup of user display names by their ID
-    const usersMap = new Map(usersData.map((user: any) => [user.user_id, user.display_name]));
-
-    // Merge owner names into the roster data
-    const mergedRosters = rostersData.map((roster: any) => ({
-      ...roster,
-      owner_name: usersMap.get(roster.owner_id) || 'Unknown Owner',
-    }));
-
-    // Upsert the data into the Supabase 'leagues' table
+    // 3. UPSERT data into Supabase
     const supabase = createClient();
-    const { error } = await supabase
+    const { data: upsertedData, error: upsertError } = await supabase
       .from('leagues')
-      .upsert({
-        id: leagueData.league_id,
-        user_email: userEmail,
-        league_name: leagueData.name,
-        rosters: mergedRosters,
-      });
+      .upsert(
+        {
+          id: sleeper_league_id, // Assuming 'id' is the column for sleeper_league_id
+          user_email,
+          league_name: sleeperLeagueData.name,
+          last_synced_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'id', // Use the 'id' column to resolve conflicts
+        }
+      )
+      .select()
+      .single();
 
-    if (error) {
-      console.error('Supabase upsert error:', error);
+    if (upsertError) {
+      console.error('Supabase upsert error:', upsertError);
       return NextResponse.json({ success: false, error: 'Failed to save league data to the database.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    console.log('Supabase upsert successful:', upsertedData);
+
+    // 4. Return the upserted row
+    return NextResponse.json({ success: true, data: upsertedData });
 
   } catch (e: any) {
     console.error('API Error:', e);

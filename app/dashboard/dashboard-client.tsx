@@ -5,16 +5,20 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import type { User } from '@supabase/supabase-js'
+import RosterPreviewCard from '@/components/RosterPreviewCard';
+
+interface Roster {
+  owner_name: string;
+  players: string[];
+}
 
 interface League {
-  id: string;
+  id: string; // This is the sleeper_league_id
   user_email: string;
   league_name: string;
-  roster: {
-    team_count: number;
-    players: string[];
-  };
   created_at: string;
+  last_synced_at: string | null;
+  rosters: Roster[] | null;
 }
 
 interface DashboardClientProps {
@@ -26,6 +30,7 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
   const [leagueId, setLeagueId] = useState('');
   const [leagues, setLeagues] = useState<League[]>(initialLeagues);
   const [syncing, setSyncing] = useState(false);
+  const [syncingRosterId, setSyncingRosterId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const router = useRouter();
@@ -54,24 +59,78 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
       const response = await fetch('/api/sync-league', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leagueId, userEmail }),
+        body: JSON.stringify({
+          sleeper_league_id: leagueId,
+          user_email: userEmail
+        }),
       });
 
       const result = await response.json();
+      console.log('API Response:', result);
 
-      if (!response.ok) {
+      if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to sync league.');
       }
       
-      setLeagues(prevLeagues => [...prevLeagues, result.data]);
+      // Upsert logic for the frontend state
+      setLeagues(prevLeagues => {
+        const existingLeagueIndex = prevLeagues.findIndex(l => l.id === result.data.id);
+        if (existingLeagueIndex > -1) {
+          // Update existing league
+          const updatedLeagues = [...prevLeagues];
+          updatedLeagues[existingLeagueIndex] = result.data;
+          return updatedLeagues;
+        } else {
+          // Add new league
+          return [...prevLeagues, result.data];
+        }
+      });
+
       toast.success('Sleeper League connected successfully!');
       setIsModalOpen(false);
       setLeagueId('');
 
     } catch (error: any) {
+      console.error('Sync League Error:', error);
       toast.error(error.message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncRoster = async (sleeper_league_id: string) => {
+    if (!userEmail) {
+      toast.error("User not found. Please log in again.");
+      return;
+    }
+    setSyncingRosterId(sleeper_league_id);
+
+    try {
+      const response = await fetch('/api/rosters/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleeper_league_id, user_email: userEmail }),
+      });
+
+      const result = await response.json();
+      console.log('Roster Sync API Response:', result);
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to sync roster.');
+      }
+
+      setLeagues(prevLeagues =>
+        prevLeagues.map(league =>
+          league.id === sleeper_league_id ? result.data : league
+        )
+      );
+
+      toast.success('Roster synced successfully!');
+    } catch (error: any) {
+      console.error('Sync Roster Error:', error);
+      toast.error(error.message);
+    } finally {
+      setSyncingRosterId(null);
     }
   };
 
@@ -129,17 +188,30 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
         <section>
             <h2 className="text-2xl sm:text-3xl font-bold mb-6 border-b-2 border-purple-800 pb-2">Your Connected Leagues</h2>
             {leagues.length === 0 ? (
-                <div>You haven’t connected any leagues yet.</div>
+                <div>
+                  <p>You haven’t connected any leagues yet.</p>
+                  <p className='text-sm text-gray-400'>Click the button above to get started.</p>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {leagues.map(league => (
-                        <div key={league.id} className="bg-[#2c1a4d] p-6 rounded-xl shadow-lg text-left">
-                            <h3 className="text-xl font-bold mb-2">{league.league_name}</h3>
-                            <p className="text-purple-400 mb-4">{league.roster.team_count} Teams</p>
-                            <h4 className="font-semibold mb-2">Your Top Players:</h4>
-                            <p className="text-gray-300 text-sm">
-                                {league.roster.players.slice(0, 3).join(', ')}
-                            </p>
+                        <div key={league.id} className="bg-[#2c1a4d] p-6 rounded-xl shadow-lg text-left flex flex-col justify-between">
+                            <div>
+                              <h3 className="text-xl font-bold mb-2">{league.league_name || `League ${league.id}`}</h3>
+                              <p className="text-purple-400 mb-4 text-sm">
+                                Last synced: {league.last_synced_at ? new Date(league.last_synced_at).toLocaleString() : 'Never'}
+                              </p>
+                            </div>
+                            <div>
+                              <button
+                                onClick={() => handleSyncRoster(league.id)}
+                                disabled={syncingRosterId === league.id}
+                                className="w-full mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
+                              >
+                                {syncingRosterId === league.id ? 'Syncing...' : 'Sync Roster Now'}
+                              </button>
+                            </div>
+                            <RosterPreviewCard rosters={league.rosters} />
                         </div>
                     ))}
                 </div>
