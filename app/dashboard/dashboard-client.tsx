@@ -1,15 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import type { User } from '@supabase/supabase-js'
 import RosterPreviewCard from '@/components/RosterPreviewCard';
+import { timeAgo } from '@/lib/utils';
 
-interface Roster {
-  owner_name: string;
+interface Team {
+  owner: string;
+  starters: string[];
   players: string[];
+}
+
+interface RosterData {
+  teams: Team[];
 }
 
 interface League {
@@ -19,7 +25,7 @@ interface League {
   league_name: string;
   created_at: string;
   last_synced_at: string | null;
-  rosters: Roster[] | null;
+  rosters: RosterData | null;
 }
 
 interface DashboardClientProps {
@@ -30,7 +36,7 @@ interface DashboardClientProps {
 export default function DashboardClient({ user, initialLeagues }: DashboardClientProps) {
   const [leagueId, setLeagueId] = useState('');
   const [leagues, setLeagues] = useState<League[]>(initialLeagues);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingLeague, setSyncingLeague] = useState(false);
   const [syncingRosterId, setSyncingRosterId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -39,14 +45,37 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
   const userEmail = user.email;
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      toast.error(error.message)
-    } else {
-      toast.success('Logged out successfully!')
-      router.push('/auth/login')
+    await supabase.auth.signOut();
+    toast.success('Logged out successfully!');
+    router.push('/auth/login');
+  };
+
+  const handleSyncRoster = useCallback(async (sleeper_league_id: string, email: string) => {
+    setSyncingRosterId(sleeper_league_id);
+    try {
+      const response = await fetch('/api/rosters/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleeper_league_id, user_email: email }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.data) {
+        throw new Error(result.error || 'Failed to sync roster.');
+      }
+
+      setLeagues(prev =>
+        prev.map(l => (l.sleeper_league_id === sleeper_league_id ? result.data : l))
+      );
+      toast.success(`Roster for ${result.data.league_name} synced!`);
+      return result.data;
+    } catch (error: any) {
+      console.error('Sync Roster Error:', error);
+      toast.error(error.message);
+    } finally {
+      setSyncingRosterId(null);
     }
-  }
+  }, []);
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -54,9 +83,10 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
       toast.error("Please enter a Sleeper League ID.");
       return;
     }
-    setSyncing(true);
+    setSyncingLeague(true);
 
     try {
+      // Connect the league first
       const response = await fetch('/api/sync-league', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,73 +97,41 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
       });
 
       const result = await response.json();
-      console.log('API Response:', result);
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to sync league.');
+      if (!response.ok || !result.data) {
+        throw new Error(result.error || 'Failed to connect league.');
       }
-      
-      // Upsert logic for the frontend state
-      setLeagues(prevLeagues => {
-        const existingLeagueIndex = prevLeagues.findIndex(l => l.id === result.data.id);
-        if (existingLeagueIndex > -1) {
-          // Update existing league
-          const updatedLeagues = [...prevLeagues];
-          updatedLeagues[existingLeagueIndex] = result.data;
-          return updatedLeagues;
-        } else {
-          // Add new league
-          return [...prevLeagues, result.data];
-        }
-      });
 
-      toast.success('Sleeper League connected successfully!');
+      const newLeague = result.data as League;
+      toast.success(`League "${newLeague.league_name}" connected!`);
+
+      // Now, automatically sync the roster
+      const syncedLeague = await handleSyncRoster(newLeague.sleeper_league_id, newLeague.user_email);
+
+      // Update state with the fully synced league
+      if (syncedLeague) {
+        setLeagues(prevLeagues => {
+            const existingIndex = prevLeagues.findIndex(l => l.id === syncedLeague.id);
+            if (existingIndex > -1) {
+                const updated = [...prevLeagues];
+                updated[existingIndex] = syncedLeague;
+                return updated;
+            }
+            return [...prevLeagues, syncedLeague];
+        });
+      }
+
+
       setIsModalOpen(false);
       setLeagueId('');
 
     } catch (error: any) {
-      console.error('Sync League Error:', error);
+      console.error('Connect League Error:', error);
       toast.error(error.message);
     } finally {
-      setSyncing(false);
+      setSyncingLeague(false);
     }
   };
 
-  const handleSyncRoster = async (sleeper_league_id: string) => {
-    if (!userEmail) {
-      toast.error("User not found. Please log in again.");
-      return;
-    }
-    setSyncingRosterId(sleeper_league_id);
-
-    try {
-      const response = await fetch('/api/rosters/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sleeper_league_id, user_email: userEmail }),
-      });
-
-      const result = await response.json();
-      console.log('Roster Sync API Response:', result);
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to sync roster.');
-      }
-
-      setLeagues(prevLeagues =>
-        prevLeagues.map(league =>
-          league.id === result.data.id ? result.data : league
-        )
-      );
-
-      toast.success('Roster synced successfully!');
-    } catch (error: any) {
-      console.error('Sync Roster Error:', error);
-      toast.error(error.message);
-    } finally {
-      setSyncingRosterId(null);
-    }
-  };
 
   return (
     <div className="flex flex-col items-center min-h-screen bg-[#1a0033] text-white p-4 sm:p-8">
@@ -171,14 +169,14 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
                   onChange={(e) => setLeagueId(e.target.value)}
                   placeholder="Enter Sleeper League ID"
                   className="w-full p-3 bg-[#1a0033] border border-purple-800 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                  disabled={syncing}
+                  disabled={syncingLeague}
                 />
                 <div className="flex justify-end space-x-4">
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white" disabled={syncing}>
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white" disabled={syncingLeague}>
                     Cancel
                   </button>
-                  <button type="submit" className="px-4 py-2 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold" disabled={syncing}>
-                    {syncing ? 'Connecting...' : 'Connect'}
+                  <button type="submit" className="px-4 py-2 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold" disabled={syncingLeague}>
+                    {syncingLeague ? 'Connecting...' : 'Connect'}
                   </button>
                 </div>
               </form>
@@ -200,19 +198,22 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
                             <div>
                               <h3 className="text-xl font-bold mb-2">{league.league_name || `League ${league.sleeper_league_id}`}</h3>
                               <p className="text-purple-400 mb-4 text-sm">
-                                Last synced: {league.last_synced_at ? new Date(league.last_synced_at).toLocaleString() : 'Never'}
+                                Last synced: {timeAgo(league.last_synced_at)}
                               </p>
                             </div>
+                            <RosterPreviewCard 
+                              rosters={league.rosters} 
+                              isLoading={syncingRosterId === league.sleeper_league_id} 
+                            />
                             <div>
                               <button
-                                onClick={() => handleSyncRoster(league.sleeper_league_id)}
+                                onClick={() => userEmail && handleSyncRoster(league.sleeper_league_id, userEmail)}
                                 disabled={syncingRosterId === league.sleeper_league_id}
                                 className="w-full mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
                               >
                                 {syncingRosterId === league.sleeper_league_id ? 'Syncing...' : 'Sync Roster Now'}
                               </button>
                             </div>
-                            <RosterPreviewCard rosters={league.rosters} />
                         </div>
                     ))}
                 </div>
