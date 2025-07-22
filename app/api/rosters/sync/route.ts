@@ -18,11 +18,11 @@ export async function POST(request: Request) {
 
     const supabase = createClient();
 
-    // First, ensure the league exists and belongs to the user.
+    // 2. Verify the league exists and belongs to the user
     const { data: existingLeague, error: fetchError } = await supabase
       .from('leagues')
-      .select('id')
-      .eq('id', sleeper_league_id)
+      .select('id') // Only select 'id' to check for existence, which is more efficient
+      .eq('sleeper_league_id', sleeper_league_id)
       .eq('user_email', user_email)
       .single();
 
@@ -51,15 +51,14 @@ export async function POST(request: Request) {
       owner_name: usersMap.get(roster.owner_id) || 'Unknown Owner',
     }));
 
-    // 3. Update the existing league record in Supabase with the new data.
-    //    I'm using `update` here since we've already confirmed the league exists.
+    // 5. Update the league record in Supabase
     const { data: updatedLeague, error: updateError } = await supabase
       .from('leagues')
       .update({
-        rosters: mergedRosters, // Storing the combined data in the 'rosters' column.
-        last_synced_at: new Date().toISOString(), // Updating the timestamp.
+        rosters: mergedRosters,
+        last_synced_at: new Date().toISOString(),
       })
-      .eq('id', sleeper_league_id)
+      .eq('sleeper_league_id', sleeper_league_id)
       .select()
       .single();
 

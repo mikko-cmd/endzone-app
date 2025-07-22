@@ -13,7 +13,8 @@ interface Roster {
 }
 
 interface League {
-  id: string; // This is the sleeper_league_id
+  id: string; // The unique UUID from Supabase
+  sleeper_league_id: string; // The ID from the Sleeper API
   user_email: string;
   league_name: string;
   created_at: string;
@@ -121,7 +122,7 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
 
       setLeagues(prevLeagues =>
         prevLeagues.map(league =>
-          league.id === sleeper_league_id ? result.data : league
+          league.id === result.data.id ? result.data : league
         )
       );
 
@@ -197,18 +198,18 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
                     {leagues.map(league => (
                         <div key={league.id} className="bg-[#2c1a4d] p-6 rounded-xl shadow-lg text-left flex flex-col justify-between">
                             <div>
-                              <h3 className="text-xl font-bold mb-2">{league.league_name || `League ${league.id}`}</h3>
+                              <h3 className="text-xl font-bold mb-2">{league.league_name || `League ${league.sleeper_league_id}`}</h3>
                               <p className="text-purple-400 mb-4 text-sm">
                                 Last synced: {league.last_synced_at ? new Date(league.last_synced_at).toLocaleString() : 'Never'}
                               </p>
                             </div>
                             <div>
                               <button
-                                onClick={() => handleSyncRoster(league.id)}
-                                disabled={syncingRosterId === league.id}
+                                onClick={() => handleSyncRoster(league.sleeper_league_id)}
+                                disabled={syncingRosterId === league.sleeper_league_id}
                                 className="w-full mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
                               >
-                                {syncingRosterId === league.id ? 'Syncing...' : 'Sync Roster Now'}
+                                {syncingRosterId === league.sleeper_league_id ? 'Syncing...' : 'Sync Roster Now'}
                               </button>
                             </div>
                             <RosterPreviewCard rosters={league.rosters} />

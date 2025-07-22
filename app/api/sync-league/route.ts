@@ -50,19 +50,21 @@ export async function POST(request: Request) {
 
     // 3. UPSERT data into Supabase
     const supabase = createClient();
+    const leagueDataToUpsert = {
+      sleeper_league_id,
+      user_email,
+      league_name: sleeperLeagueData.name,
+      last_synced_at: new Date().toISOString(),
+    };
+
+    // Log the object being upserted, as requested
+    console.log("Upserting league row:", leagueDataToUpsert);
+
     const { data: upsertedData, error: upsertError } = await supabase
       .from('leagues')
-      .upsert(
-        {
-          id: sleeper_league_id, // Assuming 'id' is the column for sleeper_league_id
-          user_email,
-          league_name: sleeperLeagueData.name,
-          last_synced_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'id', // Use the 'id' column to resolve conflicts
-        }
-      )
+      .upsert(leagueDataToUpsert, {
+        onConflict: 'sleeper_league_id', // Use the new unique column to resolve conflicts
+      })
       .select()
       .single();
 
