@@ -63,11 +63,11 @@ export async function POST(request: Request) {
       teams: teams,
     };
 
-    // 6. Upsert the new data into the Supabase leagues table
+    // 6. Upsert this into the Supabase leagues table, using the correct column name
     const { data: updatedRow, error: updateError } = await supabase
       .from('leagues')
       .update({
-        rosters: rosters_json, // Using 'rosters' column as per schema
+        rosters_json: rosters_json, // ✅ Correct column name
         last_synced_at: new Date().toISOString(),
       })
       .eq('sleeper_league_id', sleeper_league_id)

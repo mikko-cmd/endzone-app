@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import type { User } from '@supabase/supabase-js'
 import RosterPreviewCard from '@/components/RosterPreviewCard';
+import MatchupPreviewCard from '@/components/MatchupPreviewCard'; // Import the new component
 import { timeAgo } from '@/lib/utils';
 
 interface Team {
@@ -18,6 +19,15 @@ interface RosterData {
   teams: Team[];
 }
 
+interface Matchup {
+  week: number;
+  matchup_id: number;
+  team: string;
+  opponent: string;
+  starters: string[];
+  points: number;
+}
+
 interface League {
   id: string; // The unique UUID from Supabase
   sleeper_league_id: string; // The ID from the Sleeper API
@@ -25,7 +35,9 @@ interface League {
   league_name: string;
   created_at: string;
   last_synced_at: string | null;
-  rosters: RosterData | null;
+  rosters_json: RosterData | null;
+  matchups_json: Matchup[] | null; // Add matchup fields
+  last_synced_matchups_at: string | null;
 }
 
 interface DashboardClientProps {
@@ -38,6 +50,7 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
   const [leagues, setLeagues] = useState<League[]>(initialLeagues);
   const [syncingLeague, setSyncingLeague] = useState(false);
   const [syncingRosterId, setSyncingRosterId] = useState<string | null>(null);
+  const [syncingMatchupId, setSyncingMatchupId] = useState<string | null>(null); // New state for matchup sync
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const router = useRouter();
@@ -76,6 +89,32 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
       setSyncingRosterId(null);
     }
   }, []);
+
+  const handleSyncMatchups = async (sleeper_league_id: string, email: string) => {
+    setSyncingMatchupId(sleeper_league_id);
+    try {
+      const response = await fetch('/api/matchups/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleeper_league_id, user_email: email }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.data) {
+        throw new Error(result.error || 'Failed to sync matchups.');
+      }
+
+      setLeagues(prev =>
+        prev.map(l => (l.sleeper_league_id === sleeper_league_id ? result.data : l))
+      );
+      toast.success(`Matchups for ${result.data.league_name} synced!`);
+    } catch (error: any) {
+      console.error('Sync Matchups Error:', error);
+      toast.error(error.message);
+    } finally {
+      setSyncingMatchupId(null);
+    }
+  };
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -198,20 +237,32 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
                             <div>
                               <h3 className="text-xl font-bold mb-2">{league.league_name || `League ${league.sleeper_league_id}`}</h3>
                               <p className="text-purple-400 mb-4 text-sm">
-                                Last synced: {timeAgo(league.last_synced_at)}
+                                Rosters synced: {timeAgo(league.last_synced_at)}
                               </p>
                             </div>
                             <RosterPreviewCard 
-                              rosters={league.rosters} 
+                              rosters={league.rosters_json} 
                               isLoading={syncingRosterId === league.sleeper_league_id} 
                             />
-                            <div>
+                             <MatchupPreviewCard 
+                              matchups={league.matchups_json}
+                              isLoading={syncingMatchupId === league.sleeper_league_id}
+                              lastSynced={league.last_synced_matchups_at ? timeAgo(league.last_synced_matchups_at) : null}
+                            />
+                            <div className="flex flex-col space-y-2 mt-4">
                               <button
                                 onClick={() => userEmail && handleSyncRoster(league.sleeper_league_id, userEmail)}
-                                disabled={syncingRosterId === league.sleeper_league_id}
-                                className="w-full mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                disabled={!!syncingRosterId}
+                                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
                               >
-                                {syncingRosterId === league.sleeper_league_id ? 'Syncing...' : 'Sync Roster Now'}
+                                {syncingRosterId === league.sleeper_league_id ? 'Syncing...' : 'Sync Roster'}
+                              </button>
+                              <button
+                                onClick={() => userEmail && handleSyncMatchups(league.sleeper_league_id, userEmail)}
+                                disabled={!!syncingMatchupId}
+                                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
+                              >
+                                {syncingMatchupId === league.sleeper_league_id ? 'Syncing...' : 'Sync Matchups'}
                               </button>
                             </div>
                         </div>
