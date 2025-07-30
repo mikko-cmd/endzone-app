@@ -22,6 +22,7 @@ import { z } from 'zod';
 const syncLeagueSchema = z.object({
   sleeper_league_id: z.string().nonempty(),
   user_email: z.string().email(),
+  sleeper_username: z.string().nonempty(),
 });
 
 export async function POST(request: Request) {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     if (!validation.success) {
       return NextResponse.json({ success: false, error: 'Invalid request body', details: validation.error.flatten() }, { status: 400 });
     }
-    const { sleeper_league_id, user_email } = validation.data;
+    const { sleeper_league_id, user_email, sleeper_username } = validation.data;
 
     // 2. Fetch league metadata from Sleeper API
     console.log(`Fetching league data for ID: ${sleeper_league_id}`);
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
     const leagueDataToUpsert = {
       sleeper_league_id,
       user_email,
+      sleeper_username,
       league_name: sleeperLeagueData.name,
       last_synced_at: new Date().toISOString(),
     };

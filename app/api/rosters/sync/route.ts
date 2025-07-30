@@ -6,7 +6,7 @@ import { z } from 'zod';
 const syncRosterSchema = z.object({
   sleeper_league_id: z.string().nonempty(),
   user_email: z.string().email(),
-  sleeper_username: z.string().nonempty(), // Added sleeper_username
+  sleeper_username: z.string().nonempty(), // Re-added sleeper_username
 });
 
 export async function POST(request: Request) {
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const playerMap = new Map<string, string>();
     for (const playerId in playersData) {
       const player = playersData[playerId];
-      playerMap.set(playerId, `${player.first_name} ${player.last_name}`);
+      playerMap.set(playerId, player.full_name || `${player.first_name} ${player.last_name}`);
     }
 
     // Find the user's ID from their username
@@ -73,24 +73,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, error: 'Roster not found for this user in the league.' }, { status: 404 });
     }
     
-    // Map player IDs to full names
-    const starters = userRoster.starters ? userRoster.starters.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
-    const roster = userRoster.players ? userRoster.players.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
-
-    // Create the final JSON object for this user
-    const rosters_json = {
-      username: sleeper_username,
-      starters,
-      roster,
-    };
+    // Map player IDs to full names for this user's roster
+    const startersArray = userRoster.starters ? userRoster.starters.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
+    const fullRosterArray = userRoster.players ? userRoster.players.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
 
     // Upsert this into the Supabase leagues table
     const { data: updatedRow, error: updateError } = await supabase
       .from('leagues')
       .update({
-        rosters_json: rosters_json,
+        starters_json: startersArray,
+        roster_json: fullRosterArray,
         last_synced_at: new Date().toISOString(),
-        sleeper_username: sleeper_username, // Save the username
       })
       .eq('sleeper_league_id', sleeper_league_id)
       .eq('user_email', user_email)
