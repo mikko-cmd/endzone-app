@@ -6,6 +6,7 @@ import { z } from 'zod';
 const syncRosterSchema = z.object({
   sleeper_league_id: z.string().nonempty(),
   user_email: z.string().email(),
+  sleeper_username: z.string().nonempty(), // Added sleeper_username
 });
 
 export async function POST(request: Request) {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
       console.error('Invalid request body:', validation.error.flatten());
       return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
     }
-    const { sleeper_league_id, user_email } = validation.data;
+    const { sleeper_league_id, user_email, sleeper_username } = validation.data;
 
     const supabase = createClient();
 
@@ -35,40 +36,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'League not found or access denied.' }, { status: 404 });
     }
 
-    // 2 & 3. Fetch roster and user data from the Sleeper API
-    console.log(`Fetching rosters and users for league ID: ${sleeper_league_id}`);
-    const [rostersRes, usersRes] = await Promise.all([
+    // Fetch player, roster, and user data from the Sleeper API
+    console.log(`Fetching data for league ID: ${sleeper_league_id}`);
+    const [playersRes, rostersRes, usersRes] = await Promise.all([
+      fetch(`https://api.sleeper.app/v1/players/nfl`),
       fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/rosters`),
       fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/users`),
     ]);
 
-    if (!rostersRes.ok || !usersRes.ok) {
+    if (!playersRes.ok || !rostersRes.ok || !usersRes.ok) {
       console.error('Failed to fetch data from Sleeper.');
-      return NextResponse.json({ success: false, error: 'Failed to fetch roster or user data from Sleeper.' }, { status: 502 });
+      return NextResponse.json({ success: false, error: 'Failed to fetch data from Sleeper.' }, { status: 502 });
     }
 
+    const playersData = await playersRes.json();
     const rostersData = await rostersRes.json();
     const usersData = await usersRes.json();
 
-    // 4. Match owner_id to usernames and build the teams array
-    const usersMap = new Map(usersData.map((user: any) => [user.user_id, user.display_name]));
-    const teams = rostersData.map((roster: any) => ({
-      owner: usersMap.get(roster.owner_id) || 'Unknown Owner',
-      starters: roster.starters || [],
-      players: roster.players || [],
-    }));
+    // Create a player map for efficient lookup
+    const playerMap = new Map<string, string>();
+    for (const playerId in playersData) {
+      const player = playersData[playerId];
+      playerMap.set(playerId, `${player.first_name} ${player.last_name}`);
+    }
 
-    // 5. Create the rosters_json object
+    // Find the user's ID from their username
+    const leagueUser = usersData.find((user: any) => user.display_name === sleeper_username);
+    if (!leagueUser) {
+        return NextResponse.json({ success: false, error: `Sleeper user "${sleeper_username}" not found in this league.` }, { status: 404 });
+    }
+    const userId = leagueUser.user_id;
+
+    // Find the user's specific roster
+    const userRoster = rostersData.find((roster: any) => roster.owner_id === userId);
+    if (!userRoster) {
+        return NextResponse.json({ success: false, error: 'Roster not found for this user in the league.' }, { status: 404 });
+    }
+    
+    // Map player IDs to full names
+    const starters = userRoster.starters ? userRoster.starters.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
+    const roster = userRoster.players ? userRoster.players.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
+
+    // Create the final JSON object for this user
     const rosters_json = {
-      teams: teams,
+      username: sleeper_username,
+      starters,
+      roster,
     };
 
-    // 6. Upsert this into the Supabase leagues table, using the correct column name
+    // Upsert this into the Supabase leagues table
     const { data: updatedRow, error: updateError } = await supabase
       .from('leagues')
       .update({
-        rosters_json: rosters_json, // ✅ Correct column name
+        rosters_json: rosters_json,
         last_synced_at: new Date().toISOString(),
+        sleeper_username: sleeper_username, // Save the username
       })
       .eq('sleeper_league_id', sleeper_league_id)
       .eq('user_email', user_email)
