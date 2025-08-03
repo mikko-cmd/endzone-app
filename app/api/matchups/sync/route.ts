@@ -33,29 +33,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'League not found or access denied.' }, { status: 404 });
     }
 
-    // 2. Fetch current NFL week
-    const nflStateRes = await fetch('https://api.sleeper.app/v1/state/nfl');
-    if (!nflStateRes.ok) {
-      return NextResponse.json({ success: false, error: 'Failed to fetch NFL state from Sleeper.' }, { status: 502 });
+    const WEEKS_TO_FETCH = 18;
+    const weekPromises = [];
+    for (let week = 1; week <= WEEKS_TO_FETCH; week++) {
+      weekPromises.push(fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/matchups/${week}`));
     }
-    const nflState = await nflStateRes.json();
-    const week = nflState.week;
-    console.log(`Current NFL week: ${week}`);
 
     // 3. Fetch matchups, users, and rosters from Sleeper API
-    const [matchupsRes, usersRes, rostersRes] = await Promise.all([
-      fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/matchups/${week}`),
+    const [usersRes, rostersRes, ...matchupsResponses] = await Promise.all([
       fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/users`),
       fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/rosters`),
+      ...weekPromises,
     ]);
+    
+    const successfulMatchupResponses = matchupsResponses.filter(res => res.ok);
 
-    if (!matchupsRes.ok || !usersRes.ok || !rostersRes.ok) {
+    if (!usersRes.ok || !rostersRes.ok || successfulMatchupResponses.length === 0) {
       return NextResponse.json({ success: false, error: 'Failed to fetch league data from Sleeper.' }, { status: 502 });
     }
 
-    const matchupsData: any[] = await matchupsRes.json();
     const usersData: any[] = await usersRes.json();
     const rostersData: any[] = await rostersRes.json();
+    const weeklyMatchupsData = await Promise.all(successfulMatchupResponses.map(res => res.json()));
+    const matchupsData: any[] = weeklyMatchupsData.flat();
     
     // 4. Process and combine data
     const usersMap = new Map(usersData.map(user => [user.user_id, user.display_name]));
@@ -64,22 +64,24 @@ export async function POST(request: Request) {
     // Create a map of matchup_id to a list of teams in that matchup
     const matchupsByGroup = new Map<number, any[]>();
     matchupsData.forEach(m => {
-        if (!matchupsByGroup.has(m.matchup_id)) {
-            matchupsByGroup.set(m.matchup_id, []);
+        const matchupKey = `${m.week}-${m.matchup_id}`;
+        if (!matchupsByGroup.has(matchupKey)) {
+            matchupsByGroup.set(matchupKey, []);
         }
-        matchupsByGroup.get(m.matchup_id)!.push(m);
+        matchupsByGroup.get(matchupKey)!.push(m);
     });
 
     const matchups_json = matchupsData.map(matchup => {
         const ownerId = rosterIdToOwnerIdMap.get(matchup.roster_id);
         const teamName = usersMap.get(ownerId) || 'Unknown Team';
 
-        const opponentMatchup = matchupsByGroup.get(matchup.matchup_id)?.find(m => m.roster_id !== matchup.roster_id);
+        const matchupKey = `${matchup.week}-${matchup.matchup_id}`;
+        const opponentMatchup = matchupsByGroup.get(matchupKey)?.find(m => m.roster_id !== matchup.roster_id);
         const opponentOwnerId = opponentMatchup ? rosterIdToOwnerIdMap.get(opponentMatchup.roster_id) : null;
         const opponentName = opponentOwnerId ? usersMap.get(opponentOwnerId) : 'No Opponent';
 
         return {
-            week: week,
+            week: matchup.week,
             matchup_id: matchup.matchup_id,
             team: teamName,
             opponent: opponentName,

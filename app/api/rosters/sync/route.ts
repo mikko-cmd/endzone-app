@@ -2,28 +2,42 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// Zod schema to validate the incoming request body
 const syncRosterSchema = z.object({
   sleeper_league_id: z.string().nonempty(),
   user_email: z.string().email(),
-  sleeper_username: z.string().nonempty(), // Re-added sleeper_username
+  sleeper_username: z.string().nonempty(),
 });
+
+// Add timeout wrapper for fetch requests
+const fetchWithTimeout = async (url: string, timeoutMs: number = 10000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
 
 export async function POST(request: Request) {
   try {
-    // 1. Validate request body
     const body = await request.json();
     const validation = syncRosterSchema.safeParse(body);
 
     if (!validation.success) {
-      console.error('Invalid request body:', validation.error.flatten());
-      return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Invalid request body' },
+        { status: 400 }
+      );
     }
     const { sleeper_league_id, user_email, sleeper_username } = validation.data;
 
     const supabase = createClient();
 
-    // First, ensure the league exists and belongs to the user.
     const { data: existingLeague, error: fetchError } = await supabase
       .from('leagues')
       .select('id')
@@ -32,57 +46,130 @@ export async function POST(request: Request) {
       .single();
 
     if (fetchError || !existingLeague) {
-      console.error('League not found or access denied:', fetchError);
-      return NextResponse.json({ success: false, error: 'League not found or access denied.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'League not found or access denied.' },
+        { status: 404 }
+      );
     }
 
-    // Fetch player, roster, and user data from the Sleeper API
-    console.log(`Fetching data for league ID: ${sleeper_league_id}`);
-    const [playersRes, rostersRes, usersRes] = await Promise.all([
-      fetch(`https://api.sleeper.app/v1/players/nfl`),
-      fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/rosters`),
-      fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}/users`),
+    console.log(`[RosterSync] Starting sync for league ${sleeper_league_id}`);
+    const startTime = Date.now();
+
+    // Only fetch essential data with timeouts
+    const [rostersRes, usersRes] = await Promise.all([
+      fetchWithTimeout(`https://api.sleeper.app/v1/league/${sleeper_league_id}/rosters`, 15000),
+      fetchWithTimeout(`https://api.sleeper.app/v1/league/${sleeper_league_id}/users`, 15000),
     ]);
 
-    if (!playersRes.ok || !rostersRes.ok || !usersRes.ok) {
-      console.error('Failed to fetch data from Sleeper.');
-      return NextResponse.json({ success: false, error: 'Failed to fetch data from Sleeper.' }, { status: 502 });
+    if (!rostersRes.ok || !usersRes.ok) {
+      console.error('[RosterSync] Failed to fetch essential data from Sleeper');
+      return NextResponse.json(
+        { success: false, error: 'Failed to fetch data from Sleeper.' },
+        { status: 502 }
+      );
     }
 
-    const playersData = await playersRes.json();
-    const rostersData = await rostersRes.json();
-    const usersData = await usersRes.json();
+    const [rostersData, usersData] = await Promise.all([
+      rostersRes.json(),
+      usersRes.json(),
+    ]);
 
-    // Create a player map for efficient lookup
-    const playerMap = new Map<string, string>();
+    console.log(`[RosterSync] Essential data fetched in ${Date.now() - startTime}ms`);
+
+    // Try to fetch player data and stats, but don't fail if they timeout
+    let playersData = {};
+    let statsData = {};
+
+    try {
+      const [playersRes, statsRes] = await Promise.all([
+        fetchWithTimeout(`https://api.sleeper.app/v1/players/nfl`, 20000),
+        fetchWithTimeout(`https://api.sleeper.app/v1/stats/nfl/2023/1`, 15000),
+      ]);
+
+      if (playersRes.ok && statsRes.ok) {
+        [playersData, statsData] = await Promise.all([
+          playersRes.json(),
+          statsRes.json(),
+        ]);
+        console.log(`[RosterSync] Additional data fetched in ${Date.now() - startTime}ms`);
+      } else {
+        console.warn('[RosterSync] Failed to fetch additional data, continuing with basic data');
+      }
+    } catch (error) {
+      console.warn('[RosterSync] Timeout or error fetching additional data, continuing with basic data:', error);
+    }
+
+    // Create player map
+    const playerMap = new Map<string, any>();
     for (const playerId in playersData) {
-      const player = playersData[playerId];
-      playerMap.set(playerId, player.full_name || `${player.first_name} ${player.last_name}`);
+      playerMap.set(playerId, playersData[playerId]);
     }
 
-    // Find the user's ID from their username
-    const leagueUser = usersData.find((user: any) => user.display_name === sleeper_username);
+    // Create points map
+    const pointsMap = new Map<string, number>();
+    if (statsData && typeof statsData === 'object') {
+      for (const playerId of Object.keys(statsData)) {
+        const playerStats = statsData[playerId];
+        if (playerStats?.pts_half_ppr) {
+          pointsMap.set(playerId, playerStats.pts_half_ppr);
+        }
+      }
+    }
+
+    const leagueUser = usersData.find(
+      (user: any) => user.display_name === sleeper_username
+    );
     if (!leagueUser) {
-        return NextResponse.json({ success: false, error: `Sleeper user "${sleeper_username}" not found in this league.` }, { status: 404 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Sleeper user "${sleeper_username}" not found in this league.`,
+        },
+        { status: 404 }
+      );
     }
     const userId = leagueUser.user_id;
 
-    // Find the user's specific roster
-    const userRoster = rostersData.find((roster: any) => roster.owner_id === userId);
+    const userRoster = rostersData.find(
+      (roster: any) => roster.owner_id === userId
+    );
     if (!userRoster) {
-        return NextResponse.json({ success: false, error: 'Roster not found for this user in the league.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'Roster not found for this user in the league.' },
+        { status: 404 }
+      );
     }
-    
-    // Map player IDs to full names for this user's roster
-    const startersArray = userRoster.starters ? userRoster.starters.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
-    const fullRosterArray = userRoster.players ? userRoster.players.map((id: string) => playerMap.get(id) || 'Unknown Player') : [];
 
-    // Upsert this into the Supabase leagues table
+    const mapPlayer = (id: string) => {
+      const playerDetails = playerMap.get(id);
+      return {
+        id,
+        name:
+          playerDetails?.full_name ||
+          `${playerDetails?.first_name} ${playerDetails?.last_name}` ||
+          'Unknown Player',
+        points: pointsMap.get(id) || 0,
+        position: playerDetails?.position || 'N/A',
+        team: playerDetails?.team || 'N/A',
+      };
+    };
+
+    const starterIds = userRoster.starters || [];
+    const playerIds = userRoster.players || [];
+
+    const starters = starterIds.map(mapPlayer);
+    const roster = playerIds.map(mapPlayer);
+
+    const rosterData = {
+      username: sleeper_username,
+      starters,
+      roster,
+    };
+
     const { data: updatedRow, error: updateError } = await supabase
       .from('leagues')
       .update({
-        starters_json: startersArray,
-        roster_json: fullRosterArray,
+        rosters_json: rosterData,
         last_synced_at: new Date().toISOString(),
       })
       .eq('sleeper_league_id', sleeper_league_id)
@@ -92,18 +179,30 @@ export async function POST(request: Request) {
 
     if (updateError) {
       console.error('Supabase update error:', updateError);
-      return NextResponse.json({ success: false, error: 'Failed to update roster data in the database.' }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Failed to update roster data in the database.',
+        },
+        { status: 500 }
+      );
     }
 
-    // 7. Return a success response with the updated row
-    return NextResponse.json({
-      message: "Roster sync successful",
-      data: updatedRow
-    }, { status: 200 });
+    const totalTime = Date.now() - startTime;
+    console.log(`[RosterSync] Completed sync for league ${sleeper_league_id} in ${totalTime}ms`);
 
+    return NextResponse.json(
+      {
+        message: 'Roster sync successful',
+        data: updatedRow,
+      },
+      { status: 200 }
+    );
   } catch (e: any) {
-    // 8. Handle any other errors gracefully
     console.error('API Error:', e);
-    return NextResponse.json({ success: false, error: e.message || 'An unexpected error occurred.' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: e.message || 'An unexpected error occurred.' },
+      { status: 500 }
+    );
   }
-} 
+}

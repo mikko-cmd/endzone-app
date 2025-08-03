@@ -1,24 +1,17 @@
-'use client'
+'use client';
 
-import { useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
-import { toast } from 'react-hot-toast'
-import type { User } from '@supabase/supabase-js'
-import RosterPreviewCard from '@/components/RosterPreviewCard';
-import MatchupPreviewCard from '@/components/MatchupPreviewCard'; // Import the new component
-import { timeAgo } from '@/lib/utils';
-
-interface Team {
-  owner: string;
-  starters: string[];
-  players: string[];
-}
+import { useState, useCallback, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { toast } from 'react-hot-toast';
+import type { User } from '@supabase/supabase-js';
+import { PlusCircle } from 'lucide-react';
 
 interface RosterData {
   username: string;
-  starters: string[];
-  roster: string[];
+  starters: any[];
+  roster: any[];
 }
 
 interface Matchup {
@@ -31,35 +24,56 @@ interface Matchup {
 }
 
 interface League {
-  id: string; // The unique UUID from Supabase
-  sleeper_league_id: string; // The ID from the Sleeper API
+  id: string;
+  sleeper_league_id: string;
   user_email: string;
   league_name: string;
-  sleeper_username: string | null; // Added field
+  sleeper_username: string | null;
   created_at: string;
   last_synced_at: string | null;
   rosters_json: RosterData | null;
-  matchups_json: Matchup[] | null; // Add matchup fields
+  matchups_json: Matchup[] | null;
   last_synced_matchups_at: string | null;
 }
 
-interface DashboardClientProps {
-    user: User;
-    initialLeagues: League[];
+interface LeagueCardProps {
+  league: League;
 }
 
-export default function DashboardClient({ user, initialLeagues }: DashboardClientProps) {
+const LeagueCard: React.FC<LeagueCardProps> = ({ league }) => {
+  return (
+    <Link href={`/league/${league.sleeper_league_id}`}>
+      <div className="cursor-pointer bg-purple-900 text-white rounded-xl p-4 shadow-md hover:shadow-lg hover:shadow-purple-500/50 hover:scale-105 transition-all duration-200 ease-in-out">
+        <h2 className="text-xl font-semibold">{league.league_name}</h2>
+        <p className="text-sm text-gray-300">ID: {league.sleeper_league_id}</p>
+      </div>
+    </Link>
+  );
+};
+
+interface DashboardClientProps {
+  user: User;
+  initialLeagues: League[];
+}
+
+export default function DashboardClient({
+  user,
+  initialLeagues,
+}: DashboardClientProps) {
   const [leagueId, setLeagueId] = useState('');
-  const [sleeperUsername, setSleeperUsername] = useState(''); // New state for username
+  const [sleeperUsername, setSleeperUsername] = useState('');
   const [leagues, setLeagues] = useState<League[]>(initialLeagues);
   const [syncingLeague, setSyncingLeague] = useState(false);
-  const [syncingRosterId, setSyncingRosterId] = useState<string | null>(null);
-  const [syncingMatchupId, setSyncingMatchupId] = useState<string | null>(null); // New state for matchup sync
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
   const userEmail = user.email;
+
+  // Add this useEffect to log league data
+  useEffect(() => {
+    console.log('[DashboardClient] Leagues loaded:', leagues.length, leagues);
+  }, [leagues]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -67,73 +81,68 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
     router.push('/auth/login');
   };
 
-  const handleSyncRoster = useCallback(async (sleeper_league_id: string, email: string, username: string) => {
-    setSyncingRosterId(sleeper_league_id);
-    try {
-      const response = await fetch('/api/rosters/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          sleeper_league_id, 
-          user_email: email,
-          sleeper_username: username,
-        }),
-      });
+  const handleSyncRoster = useCallback(
+    async (sleeper_league_id: string, email: string, username: string) => {
+      try {
+        const response = await fetch('/api/rosters/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sleeper_league_id,
+            user_email: email,
+            sleeper_username: username,
+          }),
+        });
 
-      const result = await response.json();
-      if (!response.ok || !result.data) {
-        throw new Error(result.error || 'Failed to sync roster.');
+        const result = await response.json();
+        if (!response.ok || !result.data) {
+          throw new Error(result.error || 'Failed to sync roster.');
+        }
+
+        setLeagues(prev =>
+          prev.map(l =>
+            l.sleeper_league_id === sleeper_league_id ? result.data : l
+          )
+        );
+        return result.data;
+      } catch (error: any) {
+        console.error('Sync Roster Error:', error);
+        toast.error(error.message);
       }
+    },
+    []
+  );
 
-      setLeagues(prev =>
-        prev.map(l => (l.sleeper_league_id === sleeper_league_id ? result.data : l))
-      );
-      toast.success(`Roster for ${result.data.league_name} synced!`);
-      return result.data;
-    } catch (error: any) {
-      console.error('Sync Roster Error:', error);
-      toast.error(error.message);
-    } finally {
-      setSyncingRosterId(null);
-    }
-  }, []);
+  // TEMPORARILY DISABLE AUTO-SYNC TO IMPROVE PERFORMANCE
+  // useEffect(() => {
+  //   const syncAllRosters = async () => {
+  //     if (!userEmail) return;
 
-  const handleSyncMatchups = async (sleeper_league_id: string, email: string) => {
-    setSyncingMatchupId(sleeper_league_id);
-    try {
-      const response = await fetch('/api/matchups/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sleeper_league_id, user_email: email }),
-      });
+  //     const syncPromises = leagues
+  //       .filter(league => league.sleeper_username)
+  //       .map(league =>
+  //         handleSyncRoster(
+  //           league.sleeper_league_id,
+  //           userEmail,
+  //           league.sleeper_username!
+  //         )
+  //       );
 
-      const result = await response.json();
-      if (!response.ok || !result.data) {
-        throw new Error(result.error || 'Failed to sync matchups.');
-      }
+  //     await Promise.all(syncPromises);
+  //   };
 
-      setLeagues(prev =>
-        prev.map(l => (l.sleeper_league_id === sleeper_league_id ? result.data : l))
-      );
-      toast.success(`Matchups for ${result.data.league_name} synced!`);
-    } catch (error: any) {
-      console.error('Sync Matchups Error:', error);
-      toast.error(error.message);
-    } finally {
-      setSyncingMatchupId(null);
-    }
-  };
+  //   syncAllRosters();
+  // }, [userEmail, handleSyncRoster]);
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!leagueId || !userEmail || !sleeperUsername) {
-      toast.error("Please provide a League ID and your Sleeper Username.");
+      toast.error('Please provide a League ID and your Sleeper Username.');
       return;
     }
     setSyncingLeague(true);
 
     try {
-      // Connect the league first
       const response = await fetch('/api/sync-league', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,27 +161,29 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
       const newLeague = result.data as League;
       toast.success(`League "${newLeague.league_name}" connected!`);
 
-      // Now, automatically sync the roster
-      const syncedLeague = await handleSyncRoster(newLeague.sleeper_league_id, newLeague.user_email, sleeperUsername);
+      const syncedLeague = await handleSyncRoster(
+        newLeague.sleeper_league_id,
+        newLeague.user_email,
+        sleeperUsername
+      );
 
-      // Update state with the fully synced league
       if (syncedLeague) {
         setLeagues(prevLeagues => {
-            const existingIndex = prevLeagues.findIndex(l => l.id === syncedLeague.id);
-            if (existingIndex > -1) {
-                const updated = [...prevLeagues];
-                updated[existingIndex] = syncedLeague;
-                return updated;
-            }
-            return [...prevLeagues, syncedLeague];
+          const existingIndex = prevLeagues.findIndex(
+            l => l.id === syncedLeague.id
+          );
+          if (existingIndex > -1) {
+            const updated = [...prevLeagues];
+            updated[existingIndex] = syncedLeague;
+            return updated;
+          }
+          return [...prevLeagues, syncedLeague];
         });
       }
 
-
       setIsModalOpen(false);
       setLeagueId('');
-      setSleeperUsername(''); // Clear username field
-
+      setSleeperUsername('');
     } catch (error: any) {
       console.error('Connect League Error:', error);
       toast.error(error.message);
@@ -181,30 +192,34 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
     }
   };
 
-
   return (
     <div className="flex flex-col items-center min-h-screen bg-[#1a0033] text-white p-4 sm:p-8">
-       <div className="w-full max-w-4xl text-center">
+      <div className="w-full max-w-4xl text-center">
         <header className="flex justify-between items-center mb-12">
-            <h1 className="text-3xl sm:text-5xl font-bold">Dashboard</h1>
-            <div className="flex items-center space-x-4">
-                {userEmail && <p className="text-sm sm:text-lg hidden md:block">Signed in as: {userEmail}</p>}
-                <button
-                    onClick={handleLogout}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md font-semibold text-sm"
-                >
-                    Logout
-                </button>
-            </div>
-        </header>
-        
-        <div className="mb-12">
+          <h1 className="text-3xl sm:text-5xl font-bold">Dashboard</h1>
+          <div className="flex items-center space-x-4">
+            {userEmail && (
+              <p className="text-sm sm:text-lg hidden md:block">
+                Signed in as: {userEmail}
+              </p>
+            )}
             <button
-                onClick={() => setIsModalOpen(true)}
-                className="px-6 py-3 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold text-lg"
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md font-semibold text-sm"
             >
-                Connect New Sleeper League
+              Logout
             </button>
+          </div>
+        </header>
+
+        <div className="mb-12">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="px-6 py-3 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold text-lg flex items-center"
+          >
+            <PlusCircle className="mr-2" size={20} />
+            Connect New Sleeper League
+          </button>
         </div>
 
         {isModalOpen && (
@@ -215,7 +230,7 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
                 <input
                   type="text"
                   value={leagueId}
-                  onChange={(e) => setLeagueId(e.target.value)}
+                  onChange={e => setLeagueId(e.target.value)}
                   placeholder="Enter Sleeper League ID"
                   className="w-full p-3 bg-[#1a0033] border border-purple-800 rounded-md focus:ring-purple-500 focus:border-purple-500"
                   disabled={syncingLeague}
@@ -223,16 +238,25 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
                 <input
                   type="text"
                   value={sleeperUsername}
-                  onChange={(e) => setSleeperUsername(e.target.value)}
+                  onChange={e => setSleeperUsername(e.target.value)}
                   placeholder="Your Sleeper Username"
                   className="w-full p-3 bg-[#1a0033] border border-purple-800 rounded-md focus:ring-purple-500 focus:border-purple-500"
                   disabled={syncingLeague}
                 />
                 <div className="flex justify-end space-x-4">
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white" disabled={syncingLeague}>
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-gray-400 hover:text-white"
+                    disabled={syncingLeague}
+                  >
                     Cancel
                   </button>
-                  <button type="submit" className="px-4 py-2 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold" disabled={syncingLeague}>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold"
+                    disabled={syncingLeague}
+                  >
                     {syncingLeague ? 'Connecting...' : 'Connect'}
                   </button>
                 </div>
@@ -242,53 +266,26 @@ export default function DashboardClient({ user, initialLeagues }: DashboardClien
         )}
 
         <section>
-            <h2 className="text-2xl sm:text-3xl font-bold mb-6 border-b-2 border-purple-800 pb-2">Your Connected Leagues</h2>
-            {leagues.length === 0 ? (
-                <div>
-                  <p>You haven’t connected any leagues yet.</p>
-                  <p className='text-sm text-gray-400'>Click the button above to get started.</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {leagues.map(league => (
-                        <div key={league.id} className="bg-[#2c1a4d] p-6 rounded-xl shadow-lg text-left flex flex-col justify-between">
-                            <div>
-                              <h3 className="text-xl font-bold mb-2">{league.league_name || `League ${league.sleeper_league_id}`}</h3>
-                              <p className="text-purple-400 mb-4 text-sm">
-                                Rosters synced: {timeAgo(league.last_synced_at)}
-                              </p>
-                            </div>
-                            <RosterPreviewCard 
-                              rosters={league.rosters_json} 
-                              isLoading={syncingRosterId === league.sleeper_league_id} 
-                            />
-                             <MatchupPreviewCard 
-                              matchups={league.matchups_json}
-                              isLoading={syncingMatchupId === league.sleeper_league_id}
-                              lastSynced={league.last_synced_matchups_at ? timeAgo(league.last_synced_matchups_at) : null}
-                            />
-                            <div className="flex flex-col space-y-2 mt-4">
-                              <button
-                                onClick={() => userEmail && league.sleeper_username && handleSyncRoster(league.sleeper_league_id, userEmail, league.sleeper_username)}
-                                disabled={!!syncingRosterId || !league.sleeper_username}
-                                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
-                              >
-                                {syncingRosterId === league.sleeper_league_id ? 'Syncing...' : 'Sync Roster'}
-                              </button>
-                              <button
-                                onClick={() => userEmail && handleSyncMatchups(league.sleeper_league_id, userEmail)}
-                                disabled={!!syncingMatchupId}
-                                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
-                              >
-                                {syncingMatchupId === league.sleeper_league_id ? 'Syncing...' : 'Sync Matchups'}
-                              </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+          <h2 className="text-2xl sm:text-3xl font-bold mb-6 border-b-2 border-purple-800 pb-2">
+            Your Connected Leagues
+          </h2>
+          {leagues.length === 0 ? (
+            <div>
+              <p>You haven't connected any leagues yet.</p>
+              <p className="text-sm text-gray-400">
+                Click the button above to get started.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {leagues.map(league => {
+                console.log('[DashboardClient] Rendering league card for:', league.league_name);
+                return <LeagueCard key={league.id} league={league} />;
+              })}
+            </div>
+          )}
         </section>
       </div>
     </div>
-  )
-} 
+  );
+}

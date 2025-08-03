@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     const { data: upsertedData, error: upsertError } = await supabase
       .from('leagues')
       .upsert(leagueDataToUpsert, {
-        onConflict: 'sleeper_league_id', // Use the new unique column to resolve conflicts
+        onConflict: 'sleeper_league_id, user_email', // Use the new composite key to resolve conflicts
       })
       .select()
       .single();
