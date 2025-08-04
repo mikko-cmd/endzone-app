@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET(
   request: Request,
@@ -6,6 +7,7 @@ export async function GET(
 ) {
   try {
     const { playerId } = params;
+    
     if (!playerId) {
       return NextResponse.json(
         { success: false, error: 'Player ID is required' },
@@ -13,17 +15,57 @@ export async function GET(
       );
     }
 
-    // In a real app, you would use the playerId to look up the player
-    // and then generate an outlook using an AI service.
-    // For now, we'll return a hardcoded outlook.
+    // Initialize Supabase with service role key for API routes
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    const mockOutlook = "After a somewhat disappointing 2023 season, Trevor Lawrence enters 2024 with a revamped receiving corps, including rookie Brian Thomas Jr. and Gabe Davis. While his fantasy production has been inconsistent, his talent remains undeniable. For 2024, Lawrence is best viewed as a high-upside QB2. If he can reduce turnovers and take advantage of his new weapons, he has the potential to creep into the low-end QB1 conversation. He's a strong bye-week fill-in and a worthy gamble as a second quarterback in Superflex leagues.";
+    console.log(`🔍 Fetching outlook for player ID: ${playerId}`);
 
-    return NextResponse.json({ success: true, outlook: mockOutlook }, { status: 200 });
-  } catch (e: any) {
-    console.error('API Error:', e);
+    // Fetch player summary using correct column names
+    const { data: player, error } = await supabase
+      .from('players')
+      .select('summary_2025, name, position, team')
+      .eq('sleeper_id', playerId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Database error:', error);
+      return NextResponse.json(
+        { success: false, error: 'Database error occurred' },
+        { status: 500 }
+      );
+    }
+
+    if (!player) {
+      console.log(`❌ Player not found for ID: ${playerId}`);
+      return NextResponse.json(
+        { success: false, error: 'Player not found' },
+        { status: 404 }
+      );
+    }
+
+    // Return the player's AI-generated summary
+    const outlook = player.summary_2025 || 
+      `${player.name} summary not yet available. Please run the summary generation script.`;
+
+    console.log(`✅ Successfully fetched outlook for ${player.name}`);
+
+    return NextResponse.json({ 
+      success: true, 
+      outlook,
+      player: {
+        name: player.name,
+        position: player.position,
+        team: player.team
+      }
+    }, { status: 200 });
+
+  } catch (error: any) {
+    console.error('API Error:', error);
     return NextResponse.json(
-      { success: false, error: e.message || 'An unexpected error occurred.' },
+      { success: false, error: error.message || 'An unexpected error occurred.' },
       { status: 500 }
     );
   }

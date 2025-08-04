@@ -7,7 +7,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-summaries": "tsx scripts/generatePlayerSummaries.ts",
+    "generate-summaries-force": "tsx scripts/generatePlayerSummaries.ts --force",
+    "update-week-1": "tsx scripts/weeklyPlayerUpdates.ts --week 1",
+    "update-week-2": "tsx scripts/weeklyPlayerUpdates.ts --week 2",
+    "update-week-3": "tsx scripts/weeklyPlayerUpdates.ts --week 3",
+    "weekly-update": "tsx scripts/weeklyPlayerUpdates.ts"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.0",
@@ -16,14 +22,18 @@
     "@supabase/supabase-js": "^2.43.4",
     "@tanstack/react-virtual": "^3.8.3",
     "autoprefixer": "^10.4.21",
+    "axios": "^1.11.0",
     "clsx": "^2.1.1",
+    "dotenv": "^16.6.1",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.534.0",
     "next": "14.2.3",
+    "openai": "^4.104.0",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1",
     "tailwind-merge": "^2.3.0",
+    "tsx": "^4.20.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
