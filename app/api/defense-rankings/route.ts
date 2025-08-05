@@ -13,151 +13,50 @@ const ESPN_TEAM_IDS: Record<string, number> = {
     'TEN': 10, 'WAS': 28
 };
 
+// Team code type for better TypeScript support
+type TeamCode = keyof typeof ESPN_TEAM_IDS;
+
 // 2024 Final Defensive Rankings (from Pro-Football-Reference)
 // Lower numbers = better defense (less points allowed)
-const FINAL_2024_DEFENSE_RANKINGS = {
+const FINAL_2024_DEFENSE_RANKINGS: Record<string, Record<TeamCode, number>> = {
     // Defense vs QB (Fantasy Points Allowed)
     QB: {
-        'LAC': 1,   // Best vs QB
-        'PHI': 2,
-        'DEN': 3,
-        'KC': 4,
-        'MIN': 5,
-        'GB': 6,
-        'DET': 7,
-        'PIT': 8,
-        'BAL': 9,
-        'MIA': 10,
-        'BUF': 11,
-        'SEA': 12,
-        'CHI': 13,
-        'HOU': 14,
-        'ARI': 15,
-        'TB': 16,
-        'LAR': 17,
-        'WAS': 18,
-        'NO': 19,
-        'NYJ': 20,
-        'NYG': 21,
-        'NE': 22,
-        'ATL': 23,
-        'IND': 24,
-        'CIN': 25,
-        'LV': 26,
-        'CLE': 27,
-        'JAX': 28,
-        'SF': 29,
-        'TEN': 30,
-        'DAL': 31,
-        'CAR': 32   // Worst vs QB
+        'LAC': 1, 'PHI': 2, 'DEN': 3, 'KC': 4, 'MIN': 5, 'GB': 6,
+        'DET': 7, 'PIT': 8, 'BAL': 9, 'MIA': 10, 'BUF': 11, 'SEA': 12,
+        'CHI': 13, 'HOU': 14, 'ARI': 15, 'TB': 16, 'LAR': 17, 'WAS': 18,
+        'NO': 19, 'NYJ': 20, 'NYG': 21, 'NE': 22, 'ATL': 23, 'IND': 24,
+        'CIN': 25, 'LV': 26, 'CLE': 27, 'JAX': 28, 'SF': 29, 'TEN': 30,
+        'DAL': 31, 'CAR': 32
     },
 
     // Defense vs RB (Fantasy Points Allowed)
     RB: {
-        'PHI': 1,   // Best vs RB
-        'LAC': 2,
-        'DEN': 3,
-        'MIN': 4,
-        'KC': 5,
-        'GB': 6,
-        'PIT': 7,
-        'DET': 8,
-        'HOU': 9,
-        'MIA': 10,
-        'BAL': 11,
-        'CHI': 12,
-        'BUF': 13,
-        'SEA': 14,
-        'TB': 15,
-        'ARI': 16,
-        'LAR': 17,
-        'NYJ': 18,
-        'WAS': 19,
-        'NO': 20,
-        'NYG': 21,
-        'ATL': 22,
-        'NE': 23,
-        'IND': 24,
-        'CIN': 25,
-        'LV': 26,
-        'CLE': 27,
-        'SF': 28,
-        'TEN': 29,
-        'DAL': 30,
-        'JAX': 31,
-        'CAR': 32   // Worst vs RB
+        'PHI': 1, 'LAC': 2, 'DEN': 3, 'MIN': 4, 'KC': 5, 'GB': 6,
+        'PIT': 7, 'DET': 8, 'HOU': 9, 'MIA': 10, 'BAL': 11, 'CHI': 12,
+        'BUF': 13, 'SEA': 14, 'TB': 15, 'ARI': 16, 'LAR': 17, 'NYJ': 18,
+        'WAS': 19, 'NO': 20, 'NYG': 21, 'ATL': 22, 'NE': 23, 'IND': 24,
+        'CIN': 25, 'LV': 26, 'CLE': 27, 'SF': 28, 'TEN': 29, 'DAL': 30,
+        'JAX': 31, 'CAR': 32
     },
 
     // Defense vs WR (Fantasy Points Allowed)
     WR: {
-        'LAC': 1,   // Best vs WR
-        'DEN': 2,
-        'PHI': 3,
-        'MIN': 4,
-        'KC': 5,
-        'PIT': 6,
-        'GB': 7,
-        'HOU': 8,
-        'DET': 9,
-        'BAL': 10,
-        'MIA': 11,
-        'CHI': 12,
-        'BUF': 13,
-        'SEA': 14,
-        'ARI': 15,
-        'TB': 16,
-        'NYJ': 17,
-        'LAR': 18,
-        'WAS': 19,
-        'NO': 20,
-        'NYG': 21,
-        'ATL': 22,
-        'NE': 23,
-        'IND': 24,
-        'CIN': 25,
-        'LV': 26,
-        'CLE': 27,
-        'SF': 28,
-        'TEN': 29,
-        'JAX': 30,
-        'DAL': 31,
-        'CAR': 32   // Worst vs WR
+        'LAC': 1, 'DEN': 2, 'PHI': 3, 'MIN': 4, 'KC': 5, 'PIT': 6,
+        'GB': 7, 'HOU': 8, 'DET': 9, 'BAL': 10, 'MIA': 11, 'CHI': 12,
+        'BUF': 13, 'SEA': 14, 'ARI': 15, 'TB': 16, 'NYJ': 17, 'LAR': 18,
+        'WAS': 19, 'NO': 20, 'NYG': 21, 'ATL': 22, 'NE': 23, 'IND': 24,
+        'CIN': 25, 'LV': 26, 'CLE': 27, 'SF': 28, 'TEN': 29, 'JAX': 30,
+        'DAL': 31, 'CAR': 32
     },
 
     // Defense vs TE (Fantasy Points Allowed)
     TE: {
-        'LAC': 1,   // Best vs TE
-        'PHI': 2,
-        'DEN': 3,
-        'KC': 4,
-        'MIN': 5,
-        'PIT': 6,
-        'GB': 7,
-        'DET': 8,
-        'HOU': 9,
-        'BAL': 10,
-        'MIA': 11,
-        'CHI': 12,
-        'BUF': 13,
-        'SEA': 14,
-        'ARI': 15,
-        'NYJ': 16,
-        'TB': 17,
-        'LAR': 18,
-        'WAS': 19,
-        'NO': 20,
-        'NYG': 21,
-        'ATL': 22,
-        'NE': 23,
-        'IND': 24,
-        'CIN': 25,
-        'LV': 26,
-        'CLE': 27,
-        'SF': 28,
-        'TEN': 29,
-        'JAX': 30,
-        'DAL': 31,
-        'CAR': 32   // Worst vs TE
+        'LAC': 1, 'PHI': 2, 'DEN': 3, 'KC': 4, 'MIN': 5, 'PIT': 6,
+        'GB': 7, 'DET': 8, 'HOU': 9, 'BAL': 10, 'MIA': 11, 'CHI': 12,
+        'BUF': 13, 'SEA': 14, 'ARI': 15, 'NYJ': 16, 'TB': 17, 'LAR': 18,
+        'WAS': 19, 'NO': 20, 'NYG': 21, 'ATL': 22, 'NE': 23, 'IND': 24,
+        'CIN': 25, 'LV': 26, 'CLE': 27, 'SF': 28, 'TEN': 29, 'JAX': 30,
+        'DAL': 31, 'CAR': 32
     }
 };
 
@@ -169,31 +68,29 @@ interface DefenseRanking {
     rankVsWR: number;
     rankVsTE: number;
     overallDefenseRank: number;
-    strengthVsPosition?: string; // Best position to target this defense
+    strengthVsPosition?: string;
 }
 
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const position = searchParams.get('position')?.toUpperCase(); // QB, RB, WR, TE
+        const position = searchParams.get('position')?.toUpperCase();
         const team = searchParams.get('team')?.toUpperCase();
         const season = searchParams.get('season') || '2024';
 
         console.log(`🔍 Fetching 2024 final defense rankings for position: ${position}, team: ${team}`);
 
-        // Build defense rankings from our 2024 final data
         const defenseRankings: DefenseRanking[] = [];
 
         for (const [teamCode] of Object.entries(ESPN_TEAM_IDS)) {
-            const rankVsQB = FINAL_2024_DEFENSE_RANKINGS.QB[teamCode] || 32;
-            const rankVsRB = FINAL_2024_DEFENSE_RANKINGS.RB[teamCode] || 32;
-            const rankVsWR = FINAL_2024_DEFENSE_RANKINGS.WR[teamCode] || 32;
-            const rankVsTE = FINAL_2024_DEFENSE_RANKINGS.TE[teamCode] || 32;
+            const teamKey = teamCode as TeamCode;
+            const rankVsQB = FINAL_2024_DEFENSE_RANKINGS.QB[teamKey] || 32;
+            const rankVsRB = FINAL_2024_DEFENSE_RANKINGS.RB[teamKey] || 32;
+            const rankVsWR = FINAL_2024_DEFENSE_RANKINGS.WR[teamKey] || 32;
+            const rankVsTE = FINAL_2024_DEFENSE_RANKINGS.TE[teamKey] || 32;
 
-            // Calculate overall defense rank (average of all positions)
             const overallDefenseRank = Math.round((rankVsQB + rankVsRB + rankVsWR + rankVsTE) / 4);
 
-            // Determine this defense's biggest weakness (worst ranking = best matchup for offense)
             const worstRank = Math.max(rankVsQB, rankVsRB, rankVsWR, rankVsTE);
             let strengthVsPosition = '';
             if (worstRank === rankVsQB) strengthVsPosition = 'Target QBs';
@@ -215,13 +112,17 @@ export async function GET(request: Request) {
 
         // Sort by the requested position or overall defense
         if (position && ['QB', 'RB', 'WR', 'TE'].includes(position)) {
-            const sortKey = `rankVs${position}` as keyof DefenseRanking;
-            defenseRankings.sort((a, b) => (a[sortKey] as number) - (b[sortKey] as number));
+            const positionKey = position as 'QB' | 'RB' | 'WR' | 'TE';
+            const sortKey = `rankVs${positionKey}` as keyof DefenseRanking;
+            defenseRankings.sort((a, b) => {
+                const aValue = a[sortKey] as number;
+                const bValue = b[sortKey] as number;
+                return aValue - bValue;
+            });
         } else {
             defenseRankings.sort((a, b) => a.overallDefenseRank - b.overallDefenseRank);
         }
 
-        // Filter by specific team if requested
         const filteredRankings = team
             ? defenseRankings.filter(ranking => ranking.team === team)
             : defenseRankings;
