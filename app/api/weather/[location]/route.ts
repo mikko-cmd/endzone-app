@@ -173,6 +173,23 @@ function generateRecommendations(
     };
 }
 
+// Teams that play in domed stadiums (weather doesn't matter)
+const DOME_TEAMS = [
+    'NO',   // New Orleans Saints
+    'MIN',  // Minnesota Vikings  
+    'LV',   // Las Vegas Raiders
+    'LAC',  // Los Angeles Chargers
+    'HOU',  // Houston Texans
+    'ARI',  // Arizona Cardinals
+    'ATL',  // Atlanta Falcons
+    'DET',  // Detroit Lions
+    'IND'   // Indianapolis Colts
+];
+
+function isGameInDome(team: string, opponent: string): boolean {
+    return DOME_TEAMS.includes(team) || DOME_TEAMS.includes(opponent);
+}
+
 export async function GET(
     request: Request,
     { params }: { params: { location: string } }

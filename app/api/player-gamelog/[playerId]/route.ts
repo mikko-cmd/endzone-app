@@ -138,10 +138,10 @@ export async function GET(
           const isByeWeek = isTeamByeWeek(player.team, week, parseInt(season));
 
           if (log) {
-            // Player had stats this week - use real opponent
+            // Player had stats this week - use real opponent from NFLverse data
             gameLogData.push({
               week: week,
-              opponent: `vs ${log.opponent}`,
+              opponent: log.opponent, // Just use the opponent as-is
               date: `${season}-${String(8 + Math.floor(week / 4)).padStart(2, '0')}-${String(((week - 1) % 4) * 7 + 8).padStart(2, '0')}`,
               status: 'played',
 
@@ -170,9 +170,7 @@ export async function GET(
               fumbles_lost: (log.rushing_fumbles_lost || 0) + (log.receiving_fumbles_lost || 0),
 
               // Fantasy points
-              fantasy_points: log.fantasy_points || 0,
-              snap_percentage: log.snap_percentage || null,
-              game_result: Math.random() > 0.5 ? 'W' : 'L'
+              fantasy_points: log.fantasy_points || 0
             });
           } else if (isByeWeek) {
             // Team had a BYE week - show BYE
@@ -208,14 +206,15 @@ export async function GET(
               game_result: null
             });
           } else {
-            // Team played but player didn't - use generated opponent with dashes
-            const schedule = generateTeamSchedule(player.team, parseInt(season));
+            // For placeholder games (when no real data exists), use the schedule generator
+            const placeholderOpponent = generateTeamSchedule(player.team, parseInt(season))[week - 1];
+
             gameLogData.push({
               week: week,
-              opponent: schedule[week - 1] || `Week ${week}`,
+              opponent: placeholderOpponent,
               date: `${season}-${String(8 + Math.floor(week / 4)).padStart(2, '0')}-${String(((week - 1) % 4) * 7 + 8).padStart(2, '0')}`,
               status: 'dnp',
-
+              fantasy_points: 0,
               // All stats as null to show as dashes
               attempts: null,
               completions: null,
