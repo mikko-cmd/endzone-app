@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Users } from 'lucide-react'; // Import Users icon
 import { timeAgo } from '@/lib/utils';
 import { PlayerStatsRow } from '@/components/PlayerStatsRow';
 import LoadingArc from '@/components/LoadingArc';
@@ -139,15 +139,25 @@ export default function LeagueDetailClient({ league }: { league: League }) {
         </Link>
 
         <header className="mb-8 border-b border-purple-800 pb-4">
-          <h1 className="text-3xl sm:text-5xl font-bold mb-2">{league.league_name}</h1>
-          <p className="text-lg text-gray-400">
-            Full Roster for {league.rosters_json?.username || 'Your Team'}
-          </p>
-          {isMounted && league.last_synced_at && (
-            <p className="text-sm text-gray-500 mt-2">
-              Last Synced: {timeAgo(league.last_synced_at)}
-            </p>
-          )}
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl sm:text-5xl font-bold mb-2">{league.league_name}</h1>
+              <p className="text-lg text-gray-400">
+                Full Roster for {league.rosters_json?.username || 'Your Team'}
+              </p>
+              {isMounted && league.last_synced_at && (
+                <p className="text-sm text-gray-500 mt-2">
+                  Last Synced: {timeAgo(league.last_synced_at)}
+                </p>
+              )}
+            </div>
+            <Link href={`/league/${league.sleeper_league_id}/comparison`}>
+              <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-colors">
+                <Users size={20} className="mr-2" />
+                Player Comparison
+              </button>
+            </Link>
+          </div>
         </header>
         {isMounted ? (
           <RosterView
