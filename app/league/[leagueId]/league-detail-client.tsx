@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ChevronLeft, Users } from 'lucide-react'; // Import Users icon
+import { ChevronLeft, Users } from 'lucide-react';
 import { timeAgo } from '@/lib/utils';
 import { PlayerStatsRow } from '@/components/PlayerStatsRow';
 import LoadingArc from '@/components/LoadingArc';
 import PlayerCardModal from '@/components/PlayerCardModal';
-import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface Player {
   id: string;
@@ -50,9 +49,10 @@ const RosterView = ({
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     transition={{ duration: 0.4 }}
+    className="space-y-8"
   >
-    <RosterSection title="Starters" players={starters} onPlayerClick={onPlayerClick} />
-    <RosterSection title="Bench" players={bench} onPlayerClick={onPlayerClick} />
+    <RosterSection title="starters" players={starters} onPlayerClick={onPlayerClick} />
+    <RosterSection title="bench" players={bench} onPlayerClick={onPlayerClick} />
   </motion.div>
 );
 
@@ -65,47 +65,22 @@ const RosterSection = ({
   players: Player[];
   onPlayerClick: (playerId: string) => void;
 }) => {
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const rowVirtualizer = useVirtualizer({
-    count: players.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 64, // Estimate the height of each player row
-    overscan: 10,
-  });
-
   return (
-    <section className="bg-[#2c1a4d] rounded-xl shadow-lg mb-8">
-      <h2 className="text-2xl font-bold p-4 border-b border-purple-800">
-        {title}
+    <section className="bg-black border border-white">
+      <h2
+        className="text-xl font-normal p-4 border-b border-white"
+        style={{ fontFamily: 'Consolas, monospace' }}
+      >
+        [{title}]
       </h2>
-      <div ref={parentRef} className="h-[600px] overflow-y-auto">
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map(virtualItem => {
-            const player = players[virtualItem.index];
-            return (
-              <div
-                key={virtualItem.key}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualItem.size}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <PlayerStatsRow player={player} onPlayerClick={onPlayerClick} />
-              </div>
-            );
-          })}
-        </div>
+      <div>
+        {players.map((player) => (
+          <PlayerStatsRow
+            key={player.id}
+            player={player}
+            onPlayerClick={onPlayerClick}
+          />
+        ))}
       </div>
     </section>
   );
@@ -128,37 +103,49 @@ export default function LeagueDetailClient({ league }: { league: League }) {
   const bench = roster.filter(p => !starterIds.has(p.id));
 
   return (
-    <div className="min-h-screen bg-[#1a0033] text-white p-4 sm:p-8">
+    <div className="min-h-screen bg-black text-white p-4 sm:p-8">
       <div className="w-full max-w-7xl mx-auto">
+        {/* Back Navigation */}
         <Link
           href="/dashboard"
-          className="inline-flex items-center text-purple-400 hover:text-purple-300 mb-6 transition-colors"
+          className="inline-flex items-center text-white hover:text-gray-300 mb-6 transition-colors"
+          style={{ fontFamily: 'Consolas, monospace' }}
         >
           <ChevronLeft size={20} className="mr-2" />
-          Back to Dashboard
+          ← [back to dashboard]
         </Link>
 
-        <header className="mb-8 border-b border-purple-800 pb-4">
+        {/* Header */}
+        <header className="mb-8 border-b border-white pb-6">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl sm:text-5xl font-bold mb-2">{league.league_name}</h1>
-              <p className="text-lg text-gray-400">
-                Full Roster for {league.rosters_json?.username || 'Your Team'}
+              <h1
+                className="text-3xl sm:text-4xl font-normal mb-2"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                [{league.league_name}]
+              </h1>
+              <p
+                className="text-lg text-gray-400"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                {league.rosters_json?.username || 'your team'}
               </p>
-              {isMounted && league.last_synced_at && (
-                <p className="text-sm text-gray-500 mt-2">
-                  Last Synced: {timeAgo(league.last_synced_at)}
-                </p>
-              )}
+              {/* REMOVED: synced timestamp display */}
             </div>
             <Link href={`/league/${league.sleeper_league_id}/comparison`}>
-              <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-colors">
-                <Users size={20} className="mr-2" />
-                Player Comparison
+              <button
+                className="text-white border border-white hover:bg-white hover:text-black py-2 px-4 flex items-center transition-colors duration-200"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                <Users size={16} className="mr-2" />
+                [player comparison]
               </button>
             </Link>
           </div>
         </header>
+
+        {/* Roster Content */}
         {isMounted ? (
           <RosterView
             starters={starters}
@@ -168,6 +155,8 @@ export default function LeagueDetailClient({ league }: { league: League }) {
         ) : (
           <LoadingArc />
         )}
+
+        {/* Player Modal */}
         {selectedPlayerId && (
           <PlayerCardModal
             playerId={selectedPlayerId}

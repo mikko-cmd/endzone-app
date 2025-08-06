@@ -12,7 +12,7 @@ const syncRosterSchema = z.object({
 const fetchWithTimeout = async (url: string, timeoutMs: number = 10000) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   try {
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -20,6 +20,30 @@ const fetchWithTimeout = async (url: string, timeoutMs: number = 10000) => {
   } catch (error) {
     clearTimeout(timeoutId);
     throw error;
+  }
+};
+
+// Function to trigger automatic player processing
+const triggerAutoPlayerProcessing = async () => {
+  try {
+    console.log('🤖 Triggering automatic player processing...');
+
+    // Make a background request to the auto-processing endpoint
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/players/auto-process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: 10 }) // Process up to 10 new players
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Auto-processing triggered:', result);
+    } else {
+      console.warn('⚠️ Auto-processing request failed:', response.status);
+    }
+  } catch (error: any) {
+    console.warn('⚠️ Failed to trigger auto-processing:', error.message);
+    // Don't throw error - this shouldn't block the main sync operation
   }
 };
 
@@ -190,6 +214,12 @@ export async function POST(request: Request) {
 
     const totalTime = Date.now() - startTime;
     console.log(`[RosterSync] Completed sync for league ${sleeper_league_id} in ${totalTime}ms`);
+
+    // 🤖 TRIGGER AUTOMATIC PLAYER PROCESSING
+    // This runs in the background and won't block the response
+    triggerAutoPlayerProcessing().catch(error => {
+      console.warn('⚠️ Background auto-processing failed:', error.message);
+    });
 
     return NextResponse.json(
       {

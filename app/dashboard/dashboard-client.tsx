@@ -43,9 +43,15 @@ interface LeagueCardProps {
 const LeagueCard: React.FC<LeagueCardProps> = ({ league }) => {
   return (
     <Link href={`/league/${league.sleeper_league_id}`}>
-      <div className="cursor-pointer bg-purple-900 text-white rounded-xl p-4 shadow-md hover:shadow-lg hover:shadow-purple-500/50 hover:scale-105 transition-all duration-200 ease-in-out">
-        <h2 className="text-xl font-semibold">{league.league_name}</h2>
-        <p className="text-sm text-gray-300">ID: {league.sleeper_league_id}</p>
+      <div
+        className="cursor-pointer bg-black text-white border border-white p-6 hover:bg-gray-900 hover:border-gray-300 transition-all duration-200 ease-in-out"
+        style={{ fontFamily: 'Consolas, monospace' }}
+      >
+        <h2 className="text-xl font-normal mb-2">[{league.league_name}]</h2>
+        <p className="text-sm text-gray-400">id: {league.sleeper_league_id}</p>
+        {league.rosters_json?.username && (
+          <p className="text-sm text-gray-400">team: {league.rosters_json.username}</p>
+        )}
       </div>
     </Link>
   );
@@ -70,7 +76,6 @@ export default function DashboardClient({
   const supabase = createClient();
   const userEmail = user.email;
 
-  // Add this useEffect to log league data
   useEffect(() => {
     console.log('[DashboardClient] Leagues loaded:', leagues.length, leagues);
   }, [leagues]);
@@ -112,27 +117,6 @@ export default function DashboardClient({
     },
     []
   );
-
-  // TEMPORARILY DISABLE AUTO-SYNC TO IMPROVE PERFORMANCE
-  // useEffect(() => {
-  //   const syncAllRosters = async () => {
-  //     if (!userEmail) return;
-
-  //     const syncPromises = leagues
-  //       .filter(league => league.sleeper_username)
-  //       .map(league =>
-  //         handleSyncRoster(
-  //           league.sleeper_league_id,
-  //           userEmail,
-  //           league.sleeper_username!
-  //         )
-  //       );
-
-  //     await Promise.all(syncPromises);
-  //   };
-
-  //   syncAllRosters();
-  // }, [userEmail, handleSyncRoster]);
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -193,71 +177,109 @@ export default function DashboardClient({
   };
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-[#1a0033] text-white p-4 sm:p-8">
-      <div className="w-full max-w-4xl text-center">
+    <div className="min-h-screen bg-black text-white p-4 sm:p-8">
+      <div className="w-full max-w-4xl mx-auto">
+        {/* Header */}
         <header className="flex justify-between items-center mb-12">
-          <h1 className="text-3xl sm:text-5xl font-bold">Dashboard</h1>
-          <div className="flex items-center space-x-4">
+          <h1
+            className="text-4xl sm:text-5xl font-normal"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            [dashboard]
+          </h1>
+          <div className="flex items-center space-x-6">
             {userEmail && (
-              <p className="text-sm sm:text-lg hidden md:block">
-                Signed in as: {userEmail}
+              <p
+                className="text-sm text-gray-400 hidden md:block"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                {userEmail}
               </p>
             )}
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md font-semibold text-sm"
+              className="px-4 py-2 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200"
+              style={{ fontFamily: 'Consolas, monospace' }}
             >
-              Logout
+              [log out]
             </button>
           </div>
         </header>
 
-        <div className="mb-12">
+        {/* Add League Button */}
+        <div className="mb-12 text-center">
           <button
             onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold text-lg flex items-center"
+            className="px-6 py-3 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 flex items-center mx-auto"
+            style={{ fontFamily: 'Consolas, monospace' }}
           >
-            <PlusCircle className="mr-2" size={20} />
-            Connect New Sleeper League
+            <PlusCircle className="mr-2" size={16} />
+            [connect sleeper league]
           </button>
         </div>
 
+        {/* Modal */}
         {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#2c1a4d] p-8 rounded-2xl shadow-lg w-full max-w-sm">
-              <h2 className="text-2xl font-bold mb-6">Connect Your League</h2>
-              <form onSubmit={handleSyncLeague} className="space-y-4">
-                <input
-                  type="text"
-                  value={leagueId}
-                  onChange={e => setLeagueId(e.target.value)}
-                  placeholder="Enter Sleeper League ID"
-                  className="w-full p-3 bg-[#1a0033] border border-purple-800 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                  disabled={syncingLeague}
-                />
-                <input
-                  type="text"
-                  value={sleeperUsername}
-                  onChange={e => setSleeperUsername(e.target.value)}
-                  placeholder="Your Sleeper Username"
-                  className="w-full p-3 bg-[#1a0033] border border-purple-800 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                  disabled={syncingLeague}
-                />
-                <div className="flex justify-end space-x-4">
+          <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 p-8 w-full max-w-md">
+              <h2
+                className="text-2xl font-normal mb-6 text-center"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                [connect league]
+              </h2>
+              <form onSubmit={handleSyncLeague} className="space-y-6">
+                <div>
+                  <label
+                    className="block text-sm text-gray-400 mb-2"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                  >
+                    sleeper league id
+                  </label>
+                  <input
+                    type="text"
+                    value={leagueId}
+                    onChange={e => setLeagueId(e.target.value)}
+                    placeholder="123456789"
+                    className="w-full p-3 bg-black border border-white text-white placeholder-gray-500 focus:ring-1 focus:ring-white focus:border-white rounded-none"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                    disabled={syncingLeague}
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block text-sm text-gray-400 mb-2"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                  >
+                    your sleeper username
+                  </label>
+                  <input
+                    type="text"
+                    value={sleeperUsername}
+                    onChange={e => setSleeperUsername(e.target.value)}
+                    placeholder="username"
+                    className="w-full p-3 bg-black border border-white text-white placeholder-gray-500 focus:ring-1 focus:ring-white focus:border-white rounded-none"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                    disabled={syncingLeague}
+                  />
+                </div>
+                <div className="flex justify-center space-x-4 pt-4">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-gray-400 hover:text-white"
+                    className="px-6 py-2 text-gray-400 hover:text-white transition-colors"
+                    style={{ fontFamily: 'Consolas, monospace' }}
                     disabled={syncingLeague}
                   >
-                    Cancel
+                    [cancel]
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#6e00ff] hover:bg-purple-700 rounded-md font-semibold"
+                    className="px-6 py-2 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 disabled:opacity-50"
+                    style={{ fontFamily: 'Consolas, monospace' }}
                     disabled={syncingLeague}
                   >
-                    {syncingLeague ? 'Connecting...' : 'Connect'}
+                    {syncingLeague ? '[connecting...]' : '[connect]'}
                   </button>
                 </div>
               </form>
@@ -265,16 +287,21 @@ export default function DashboardClient({
           </div>
         )}
 
+        {/* Leagues Section */}
         <section>
-          <h2 className="text-2xl sm:text-3xl font-bold mb-6 border-b-2 border-purple-800 pb-2">
-            Your Connected Leagues
+          <h2
+            className="text-2xl font-normal mb-8 pb-2 border-b border-gray-700"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            [your leagues]
           </h2>
           {leagues.length === 0 ? (
-            <div>
-              <p>You haven't connected any leagues yet.</p>
-              <p className="text-sm text-gray-400">
-                Click the button above to get started.
-              </p>
+            <div
+              className="text-center text-gray-400 space-y-2"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              <p>no leagues connected yet</p>
+              <p className="text-sm">click the button above to get started</p>
             </div>
           ) : (
             <div className="space-y-4">

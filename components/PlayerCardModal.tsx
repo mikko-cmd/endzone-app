@@ -98,44 +98,39 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
   // Actually, let me fix this:
   // If years_exp = 1, they played in 2024 (rookie year = 2024)
   // If years_exp = 4, they played in 2021, 2022, 2023, 2024 (rookie year = 2021)
-  const correctRookieYear = currentYear - yearsExp; // 2025 - 1 = 2024 ✅
+  const correctRookieYear = currentYear - yearsExp; // 2025 - 1 = 2024, 2025 - 4 = 2021
 
-  const startYear = Math.max(correctRookieYear, 2000); // Allow historical seasons back to 2000
-
+  // Generate seasons from rookie year to 2024, plus 2025
+  const startYear = Math.max(correctRookieYear, 2000); // Don't go before 2000
   const seasons = [];
-  for (let year = currentYear; year >= startYear; year--) {
+
+  // Add 2025 first (upcoming season)
+  seasons.push('2025');
+
+  // Add historical seasons from most recent to oldest
+  for (let year = 2024; year >= startYear; year--) {
     seasons.push(year.toString());
   }
 
-  console.log(`🏈 Player: ${player?.full_name}, Years Exp: ${yearsExp}, Rookie Year: ${correctRookieYear}, Seasons: ${seasons}`);
-
-  const [selectedSeason, setSelectedSeason] = useState(seasons[0] || '2025');
-  const [schedule2025] = useState(() => generate2025Schedule(playerTeam || ''));
+  const [selectedSeason, setSelectedSeason] = useState('2024');
   const [loadingSeason, setLoadingSeason] = useState<string | null>(null);
 
-  // Effect to fetch season data when season is selected
-  useEffect(() => {
-    if (selectedSeason !== '2025' && !seasonGameLogs[selectedSeason] && player?.full_name) {
-      fetchSeasonGameLog(selectedSeason);
-    }
-  }, [selectedSeason, player?.full_name]);
+  // 2025 schedule (placeholder data)
+  const schedule2025 = generate2025Schedule(playerTeam || '');
 
-  // Function to fetch game log for a specific season
   const fetchSeasonGameLog = async (season: string) => {
-    if (seasonGameLogs[season] || loadingSeason === season) {
-      return; // Already loaded or loading
-    }
+    if (seasonGameLogs[season] || season === '2025') return; // Already loaded or is 2025 schedule
 
     setLoadingSeason(season);
     try {
-      console.log(`🏈 Fetching ${season} game log for ${player?.full_name}...`);
+      console.log(`🔄 Fetching ${season} game log for player ${playerId}`);
       const response = await fetch(`/api/player-gamelog/${playerId}?season=${season}&refresh=${Date.now()}`);
 
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.gameLog) {
           setSeasonGameLogs(prev => ({ ...prev, [season]: data.gameLog }));
-          console.log(`✅ Loaded ${data.gameLog.length} games for ${player?.full_name} (${season})`);
+          console.log(`✅ Loaded ${data.gameLog.length} games for ${season}`);
         }
       } else {
         console.warn(`⚠️ Failed to fetch ${season} game log:`, response.status);
@@ -158,42 +153,42 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
       {data && data.length > 0 ? (
         <div className="h-full overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[#101010] z-10">
+            <thead className="sticky top-0 bg-black z-10 border border-white">
               {/* Section Headers Row */}
-              <tr className="border-b border-gray-600">
-                <th className="px-2 py-1"></th> {/* Week */}
-                <th className="px-2 py-1"></th> {/* Opponent */}
+              <tr className="border-b border-white">
+                <th className="px-2 py-1 border-r border-white"></th> {/* Week */}
+                <th className="px-2 py-1 border-r border-white"></th> {/* Opponent */}
 
                 {/* QUARTERBACK SECTIONS */}
                 {playerPosition === 'QB' && (
                   <>
                     {/* FANTASY Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-purple-400 font-semibold text-xs">FANTASY</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FANTASY</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* PASS Section */}
-                    <th colSpan={5} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-blue-400 font-semibold text-xs">PASS</div>
+                    <th colSpan={5} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>PASS</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* RUSHING Section */}
-                    <th colSpan={3} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-green-400 font-semibold text-xs">RUSH</div>
+                    <th colSpan={3} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>RUSH</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* SACKED Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-red-400 font-semibold text-xs">SACKED</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>SACKED</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-orange-400 font-semibold text-xs">FUMBLE</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FUMBLE</div>
                     </th>
                   </>
                 )}
@@ -202,26 +197,26 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                 {playerPosition === 'RB' && (
                   <>
                     {/* FANTASY Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-purple-400 font-semibold text-xs">FANTASY</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FANTASY</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* RUSHING Section */}
-                    <th colSpan={4} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-green-400 font-semibold text-xs">RUSHING</div>
+                    <th colSpan={4} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>RUSHING</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* RECEIVING Section */}
-                    <th colSpan={6} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-blue-400 font-semibold text-xs">RECEIVING</div>
+                    <th colSpan={6} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>RECEIVING</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-orange-400 font-semibold text-xs">FUMBLE</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FUMBLE</div>
                     </th>
                   </>
                 )}
@@ -230,20 +225,20 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                 {playerPosition === 'WR' && (
                   <>
                     {/* FANTASY Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-purple-400 font-semibold text-xs">FANTASY</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FANTASY</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* RECEIVING Section */}
-                    <th colSpan={6} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-blue-400 font-semibold text-xs">RECEIVING</div>
+                    <th colSpan={6} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>RECEIVING</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-orange-400 font-semibold text-xs">FUMBLE</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FUMBLE</div>
                     </th>
                   </>
                 )}
@@ -252,60 +247,60 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                 {playerPosition === 'TE' && (
                   <>
                     {/* FANTASY Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-purple-400 font-semibold text-xs">FANTASY</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FANTASY</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* RECEIVING Section */}
-                    <th colSpan={6} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-blue-400 font-semibold text-xs">RECEIVING</div>
+                    <th colSpan={6} className="px-1 py-1 text-center border-l border-white border-r border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>RECEIVING</div>
                     </th>
-                    <th className="w-2 px-0 py-1 bg-[#101010]"></th>
+                    <th className="w-2 px-0 py-1 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Section */}
-                    <th colSpan={2} className="px-1 py-1 text-center border-l border-gray-600">
-                      <div className="text-orange-400 font-semibold text-xs">FUMBLE</div>
+                    <th colSpan={2} className="px-1 py-1 text-center border-l border-white">
+                      <div className="text-white font-semibold text-xs" style={{ fontFamily: 'Consolas, monospace' }}>FUMBLE</div>
                     </th>
                   </>
                 )}
               </tr>
 
               {/* Column Headers Row */}
-              <tr className="border-b border-gray-700 text-gray-300">
-                <th className="px-2 py-2 text-center text-xs">WK</th>
-                <th className="px-2 py-2 text-xs">OPP</th>
+              <tr className="border-b border-white text-white">
+                <th className="px-2 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>WK</th>
+                <th className="px-2 py-2 text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>OPP</th>
 
                 {/* QUARTERBACK COLUMNS */}
                 {playerPosition === 'QB' && (
                   <>
                     {/* FANTASY Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FPTS</th>
-                    <th className="px-1 py-2 text-center text-xs">SNAP%</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FPTS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>SNAP%</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* PASS Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">ATT</th>
-                    <th className="px-1 py-2 text-center text-xs">CMP</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="px-1 py-2 text-center text-xs">TD</th>
-                    <th className="px-1 py-2 text-center text-xs">INT</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>ATT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>CMP</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TD</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>INT</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* RUSHING Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">ATT</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="px-1 py-2 text-center text-xs">TD</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>ATT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TD</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* SACKED Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">SK</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>SK</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FUM</th>
-                    <th className="px-1 py-2 text-center text-xs">LOST</th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FUM</th>
+                    <th className="px-1 py-2 text-center text-xs" style={{ fontFamily: 'Consolas, monospace' }}>LOST</th>
                   </>
                 )}
 
@@ -313,29 +308,29 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                 {playerPosition === 'RB' && (
                   <>
                     {/* FANTASY Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FPTS</th>
-                    <th className="px-1 py-2 text-center text-xs">SNAP%</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FPTS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>SNAP%</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* RUSHING Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">ATT</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="px-1 py-2 text-center text-xs">YPC</th>
-                    <th className="px-1 py-2 text-center text-xs">TD</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>ATT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TD</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* RECEIVING Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">TGT</th>
-                    <th className="px-1 py-2 text-center text-xs">REC</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="px-1 py-2 text-center text-xs">YPT</th>
-                    <th className="px-1 py-2 text-center text-xs">YPC</th>
-                    <th className="px-1 py-2 text-center text-xs">TD</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TGT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>REC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TD</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FUM</th>
-                    <th className="px-1 py-2 text-center text-xs">LOST</th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FUM</th>
+                    <th className="px-1 py-2 text-center text-xs" style={{ fontFamily: 'Consolas, monospace' }}>LOST</th>
                   </>
                 )}
 
@@ -343,22 +338,22 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                 {playerPosition === 'WR' && (
                   <>
                     {/* FANTASY Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FPTS</th>
-                    <th className="px-1 py-2 text-center text-xs">SNAP%</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FPTS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>SNAP%</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* RECEIVING Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">TGT</th>
-                    <th className="px-1 py-2 text-center text-xs">REC</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="px-1 py-2 text-center text-xs">YPT</th>
-                    <th className="px-1 py-2 text-center text-xs">YPC</th>
-                    <th className="px-1 py-2 text-center text-xs">TD</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TGT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>REC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TD</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FUM</th>
-                    <th className="px-1 py-2 text-center text-xs">LOST</th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FUM</th>
+                    <th className="px-1 py-2 text-center text-xs" style={{ fontFamily: 'Consolas, monospace' }}>LOST</th>
                   </>
                 )}
 
@@ -366,22 +361,22 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                 {playerPosition === 'TE' && (
                   <>
                     {/* FANTASY Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FPTS</th>
-                    <th className="px-1 py-2 text-center text-xs">SNAP%</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FPTS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>SNAP%</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* RECEIVING Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">TGT</th>
-                    <th className="px-1 py-2 text-center text-xs">REC</th>
-                    <th className="px-1 py-2 text-center text-xs">YDS</th>
-                    <th className="px-1 py-2 text-center text-xs">YPT</th>
-                    <th className="px-1 py-2 text-center text-xs">YPC</th>
-                    <th className="px-1 py-2 text-center text-xs">TD</th>
-                    <th className="w-2 px-0 py-2 bg-[#101010]"></th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TGT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>REC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YDS</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPT</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>YPC</th>
+                    <th className="px-1 py-2 text-center text-xs border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>TD</th>
+                    <th className="w-2 px-0 py-2 bg-black border-r border-white"></th>
 
                     {/* FUMBLE Columns */}
-                    <th className="px-1 py-2 text-center text-xs border-l border-gray-600">FUM</th>
-                    <th className="px-1 py-2 text-center text-xs">LOST</th>
+                    <th className="px-1 py-2 text-center text-xs border-l border-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>FUM</th>
+                    <th className="px-1 py-2 text-center text-xs" style={{ fontFamily: 'Consolas, monospace' }}>LOST</th>
                   </>
                 )}
               </tr>
@@ -400,362 +395,355 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
                   : null;
 
                 return (
-                  <tr
-                    key={game.week || index}
-                    className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors ${index % 2 === 0 ? 'bg-gray-900/30' : 'bg-gray-800/30'
-                      }`}
-                  >
-                    {/* Common columns for all positions */}
-                    <td className="px-2 py-2 text-center font-medium">{game.week}</td>
-                    <td className="px-2 py-2 font-medium">
-                      {game.opponent}
-                    </td>
+                  <tr key={index} className="border-b border-white hover:bg-gray-900">
+                    <td className="px-2 py-2 text-center text-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>{game.week}</td>
+                    <td className="px-2 py-2 text-white border-r border-white" style={{ fontFamily: 'Consolas, monospace' }}>{game.opponent}</td>
 
-                    {/* QUARTERBACK TABLE BODY */}
+                    {/* QUARTERBACK DATA */}
                     {playerPosition === 'QB' && (
                       <>
-                        {/* FANTASY Section */}
+                        {/* FANTASY Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs font-medium border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fantasy_points', game.fantasy_points, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fantasy_points', game.fantasy_points || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fantasy_points || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fantasy_points || 0).toFixed(1)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('snap_percentage', game.snap_percentage, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('snap_percentage', game.snap_percentage || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (game.snap_percentage ? `${game.snap_percentage}%` : '-')}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* PASS Section */}
+                        {/* PASS Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('attempts', game.attempts, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('attempts', game.attempts || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.attempts || '-')}
+                          {game.status === 'dnp' ? '-' : (game.attempts || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('completions', game.completions, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('completions', game.completions || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.completions || '-')}
+                          {game.status === 'dnp' ? '-' : (game.completions || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('passing_yards', game.passing_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('passing_yards', game.passing_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.passing_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.passing_yards || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('passing_tds', game.passing_tds, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('passing_tds', game.passing_tds || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.passing_tds || '-')}
+                          {game.status === 'dnp' ? '-' : (game.passing_tds || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('interceptions', game.interceptions, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('interceptions', game.interceptions || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.interceptions || '-')}
+                          {game.status === 'dnp' ? '-' : (game.interceptions || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* RUSHING Section */}
+                        {/* RUSHING Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('carries', game.carries, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('carries', game.carries || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.carries || '-')}
+                          {game.status === 'dnp' ? '-' : (game.carries || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('rushing_yards', game.rushing_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('rushing_yards', game.rushing_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.rushing_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.rushing_yards || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('rushing_tds', game.rushing_tds, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('rushing_tds', game.rushing_tds || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.rushing_tds || '-')}
+                          {game.status === 'dnp' ? '-' : (game.rushing_tds || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* SACKED Section */}
+                        {/* SACKED Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('sacks', game.sacks, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('sacks', game.sacks || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.sacks || '-')}
+                          {game.status === 'dnp' ? '-' : (game.sacks || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('sack_yards', game.sack_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('sack_yards', game.sack_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.sack_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.sack_yards || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* FUMBLE Section */}
+                        {/* FUMBLE Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles', game.fumbles, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fumbles', game.fumbles || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles || 0)}
                         </td>
                         <td
                           className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles_lost', game.fumbles_lost, playerPosition)}
+                          style={{ ...getStatStyle('fumbles_lost', game.fumbles_lost || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || 0)}
                         </td>
                       </>
                     )}
 
-                    {/* RUNNING BACK TABLE BODY */}
+                    {/* RUNNING BACK DATA */}
                     {playerPosition === 'RB' && (
                       <>
-                        {/* FANTASY Section */}
+                        {/* FANTASY Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs font-medium border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fantasy_points', game.fantasy_points, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fantasy_points', game.fantasy_points || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fantasy_points || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fantasy_points || 0).toFixed(1)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('snap_percentage', game.snap_percentage, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('snap_percentage', game.snap_percentage || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (game.snap_percentage ? `${game.snap_percentage}%` : '-')}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* RUSHING Section */}
+                        {/* RUSHING Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('carries', game.carries, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('carries', game.carries || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.carries || '-')}
+                          {game.status === 'dnp' ? '-' : (game.carries || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('rushing_yards', game.rushing_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('rushing_yards', game.rushing_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.rushing_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.rushing_yards || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerCarry ? {} : getStatStyle('yards_per_carry', parseFloat(yardsPerCarry), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_carry', yardsPerCarry ? parseFloat(yardsPerCarry) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerCarry || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('rushing_tds', game.rushing_tds, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('rushing_tds', game.rushing_tds || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.rushing_tds || '-')}
+                          {game.status === 'dnp' ? '-' : (game.rushing_tds || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* RECEIVING Section */}
+                        {/* RECEIVING Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('targets', game.targets, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('targets', game.targets || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.targets || '-')}
+                          {game.status === 'dnp' ? '-' : (game.targets || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receptions', game.receptions, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receptions', game.receptions || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receptions || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receptions || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receiving_yards', game.receiving_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receiving_yards', game.receiving_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receiving_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receiving_yards || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerTarget ? {} : getStatStyle('yards_per_target', parseFloat(yardsPerTarget), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_target', yardsPerTarget ? parseFloat(yardsPerTarget) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerTarget || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerCatch ? {} : getStatStyle('yards_per_catch', parseFloat(yardsPerCatch), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_catch', yardsPerCatch ? parseFloat(yardsPerCatch) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerCatch || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receiving_tds', game.receiving_tds, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receiving_tds', game.receiving_tds || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receiving_tds || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receiving_tds || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* FUMBLE Section */}
+                        {/* FUMBLE Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles', game.fumbles, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fumbles', game.fumbles || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles || 0)}
                         </td>
                         <td
                           className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles_lost', game.fumbles_lost, playerPosition)}
+                          style={{ ...getStatStyle('fumbles_lost', game.fumbles_lost || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || 0)}
                         </td>
                       </>
                     )}
 
-                    {/* WIDE RECEIVER TABLE BODY */}
+                    {/* WIDE RECEIVER DATA */}
                     {playerPosition === 'WR' && (
                       <>
-                        {/* FANTASY Section */}
+                        {/* FANTASY Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs font-medium border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fantasy_points', game.fantasy_points, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fantasy_points', game.fantasy_points || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fantasy_points || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fantasy_points || 0).toFixed(1)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('snap_percentage', game.snap_percentage, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('snap_percentage', game.snap_percentage || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (game.snap_percentage ? `${game.snap_percentage}%` : '-')}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* RECEIVING Section */}
+                        {/* RECEIVING Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('targets', game.targets, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('targets', game.targets || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.targets || '-')}
+                          {game.status === 'dnp' ? '-' : (game.targets || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receptions', game.receptions, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receptions', game.receptions || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receptions || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receptions || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receiving_yards', game.receiving_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receiving_yards', game.receiving_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receiving_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receiving_yards || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerTarget ? {} : getStatStyle('yards_per_target', parseFloat(yardsPerTarget), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_target', yardsPerTarget ? parseFloat(yardsPerTarget) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerTarget || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerCatch ? {} : getStatStyle('yards_per_catch', parseFloat(yardsPerCatch), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_catch', yardsPerCatch ? parseFloat(yardsPerCatch) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerCatch || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receiving_tds', game.receiving_tds, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receiving_tds', game.receiving_tds || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receiving_tds || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receiving_tds || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* FUMBLE Section */}
+                        {/* FUMBLE Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles', game.fumbles, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fumbles', game.fumbles || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles || 0)}
                         </td>
                         <td
                           className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles_lost', game.fumbles_lost, playerPosition)}
+                          style={{ ...getStatStyle('fumbles_lost', game.fumbles_lost || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || 0)}
                         </td>
                       </>
                     )}
 
-                    {/* TIGHT END TABLE BODY */}
+                    {/* TIGHT END DATA */}
                     {playerPosition === 'TE' && (
                       <>
-                        {/* FANTASY Section */}
+                        {/* FANTASY Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs font-medium border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fantasy_points', game.fantasy_points, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fantasy_points', game.fantasy_points || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fantasy_points || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fantasy_points || 0).toFixed(1)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('snap_percentage', game.snap_percentage, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('snap_percentage', game.snap_percentage || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (game.snap_percentage ? `${game.snap_percentage}%` : '-')}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* RECEIVING Section */}
+                        {/* RECEIVING Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('targets', game.targets, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('targets', game.targets || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.targets || '-')}
+                          {game.status === 'dnp' ? '-' : (game.targets || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receptions', game.receptions, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receptions', game.receptions || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receptions || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receptions || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receiving_yards', game.receiving_yards, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receiving_yards', game.receiving_yards || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receiving_yards || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receiving_yards || 0)}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerTarget ? {} : getStatStyle('yards_per_target', parseFloat(yardsPerTarget), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_target', yardsPerTarget ? parseFloat(yardsPerTarget) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerTarget || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' || !yardsPerCatch ? {} : getStatStyle('yards_per_catch', parseFloat(yardsPerCatch), playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('yards_per_catch', yardsPerCatch ? parseFloat(yardsPerCatch) : 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
                           {game.status === 'dnp' ? '-' : (yardsPerCatch || '-')}
                         </td>
                         <td
-                          className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('receiving_tds', game.receiving_tds, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-r border-white"
+                          style={{ ...getStatStyle('receiving_tds', game.receiving_tds || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.receiving_tds || '-')}
+                          {game.status === 'dnp' ? '-' : (game.receiving_tds || 0)}
                         </td>
-                        <td className="w-2 px-0 py-2 bg-[#101010]"></td>
+                        <td className="w-2 px-0 py-2 bg-black border-r border-white"></td>
 
-                        {/* FUMBLE Section */}
+                        {/* FUMBLE Data */}
                         <td
-                          className="px-1 py-2 text-center text-xs border-l border-gray-600"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles', game.fumbles, playerPosition)}
+                          className="px-1 py-2 text-center text-xs border-l border-white border-r border-white"
+                          style={{ ...getStatStyle('fumbles', game.fumbles || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles || 0)}
                         </td>
                         <td
                           className="px-1 py-2 text-center text-xs"
-                          style={game.status === 'dnp' ? {} : getStatStyle('fumbles_lost', game.fumbles_lost, playerPosition)}
+                          style={{ ...getStatStyle('fumbles_lost', game.fumbles_lost || 0, playerPosition), fontFamily: 'Consolas, monospace' }}
                         >
-                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || '-')}
+                          {game.status === 'dnp' ? '-' : (game.fumbles_lost || 0)}
                         </td>
                       </>
                     )}
@@ -766,37 +754,38 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
           </table>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-400">
-          <div className="text-center">
-            <div className="text-lg mb-2">📊 {emptyMessage}</div>
-            <div className="text-sm">
-              {isSchedule ? 'Schedule will be updated closer to the season' : 'Game statistics not available'}
-            </div>
-          </div>
+        <div className="flex-1 flex items-center justify-center text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+          {emptyMessage}
         </div>
       )}
     </div>
   );
 
   return (
-    <div className="space-y-4 h-[400px] flex flex-col">
-      {/* Dynamic Season Tabs */}
-      <div className="flex gap-2 border-b border-gray-700 flex-shrink-0">
+    <div className="flex flex-col h-full">
+      {/* Season Selector */}
+      <div className="flex flex-wrap gap-2 mb-4">
         {seasons.map(season => (
           <button
             key={season}
-            onClick={() => setSelectedSeason(season)}
-            className={`px-4 py-2 font-medium transition-colors ${selectedSeason === season
-              ? 'text-purple-400 border-b-2 border-purple-400'
-              : 'text-gray-400 hover:text-gray-300'
+            onClick={() => {
+              setSelectedSeason(season);
+              if (season !== '2025' && season !== '2024') {
+                fetchSeasonGameLog(season);
+              }
+            }}
+            className={`px-3 py-1 text-xs border border-white transition-colors ${selectedSeason === season
+              ? 'bg-white text-black'
+              : 'bg-black text-white hover:bg-gray-900'
               }`}
+            style={{ fontFamily: 'Consolas, monospace' }}
+            disabled={loadingSeason === season}
           >
-            {season}
+            {loadingSeason === season ? 'Loading...' : season}
           </button>
         ))}
       </div>
 
-      {/* Season Content */}
       {selectedSeason === '2025' && (
         <ScrollableGameTable
           data={schedule2025}
@@ -810,9 +799,9 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
         <>
           {loadingSeason === selectedSeason ? (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <div className="animate-spin w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-2"></div>
-                <div>Loading {selectedSeason} game log...</div>
+              <div className="text-center text-white">
+                <div className="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full mx-auto mb-2"></div>
+                <div style={{ fontFamily: 'Consolas, monospace' }}>Loading {selectedSeason} game log...</div>
               </div>
             </div>
           ) : (
@@ -865,25 +854,74 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
           return;
         }
 
-        // Fetch player outlook from our API (connected to Supabase)
+        // Enhanced summary fetching with fallback
         try {
-          const outlookRes = await fetch(`/api/player-outlook/${playerId}`);
-          if (outlookRes.ok) {
-            const outlookData = await outlookRes.json();
-            if (outlookData.success && outlookData.outlook) {
-              setOutlook(outlookData.outlook);
-              console.log(`✅ Loaded outlook for ${playerData.full_name}`);
+          console.log(`🚀 Fetching enhanced summary for ${playerData.full_name}...`);
+
+          // Try enhanced summary API first
+          const enhancedRes = await fetch(`/api/players/enhanced-summary?name=${encodeURIComponent(playerData.full_name)}`);
+
+          if (enhancedRes.ok) {
+            const enhancedData = await enhancedRes.json();
+
+            if (enhancedData.summary) {
+              // Display enhanced summary with context
+              let summaryText = enhancedData.summary;
+
+              // Add context information if available
+              if (enhancedData.context && enhancedData.enhanced) {
+                const context = enhancedData.context;
+                let contextInfo = '\n\n🎯 Key Analytics:\n';
+
+                if (context.adpRound) {
+                  contextInfo += `• Draft Position: Round ${context.adpRound}\n`;
+                }
+                if (context.usage) {
+                  contextInfo += `• Team Usage: ${context.usage}%\n`;
+                }
+                if (context.redZoneTDs) {
+                  contextInfo += `• Red Zone TDs: ${context.redZoneTDs}\n`;
+                }
+                if (context.insights && context.insights.length > 0) {
+                  contextInfo += `• Profile: ${context.insights[0]}\n`;
+                }
+
+                // Add enhanced badge
+                summaryText = `🤖 ENHANCED AI ANALYSIS\n\n${summaryText}${contextInfo}`;
+              }
+
+              setOutlook(summaryText);
+              console.log(`✅ Loaded enhanced summary for ${playerData.full_name}`);
             } else {
-              console.warn(`⚠️ No outlook found for ${playerData.full_name}`);
-              setOutlook('Player summary not yet available.');
+              throw new Error('No enhanced summary available');
             }
           } else {
-            console.warn(`⚠️ Outlook API error for ${playerData.full_name}:`, outlookRes.status);
+            throw new Error(`Enhanced API error: ${enhancedRes.status}`);
+          }
+
+        } catch (enhancedError) {
+          console.warn(`⚠️ Enhanced summary failed for ${playerData.full_name}, falling back...`, enhancedError);
+
+          // Fallback to existing outlook API
+          try {
+            const outlookRes = await fetch(`/api/players/${playerId}/outlook`);
+            if (outlookRes.ok) {
+              const outlookData = await outlookRes.json();
+              if (outlookData.success && outlookData.outlook) {
+                setOutlook(outlookData.outlook);
+                console.log(`✅ Loaded fallback outlook for ${playerData.full_name}`);
+              } else {
+                console.warn(`⚠️ No outlook found for ${playerData.full_name}`);
+                setOutlook('Player summary not yet available. Enhanced AI analysis coming soon!');
+              }
+            } else {
+              console.warn(`⚠️ Outlook API error for ${playerData.full_name}:`, outlookRes.status);
+              setOutlook('Unable to load player summary.');
+            }
+          } catch (outlookError) {
+            console.warn(`⚠️ Failed to fetch outlook for ${playerData.full_name}:`, outlookError);
             setOutlook('Unable to load player summary.');
           }
-        } catch (outlookError) {
-          console.warn(`⚠️ Failed to fetch outlook for ${playerData.full_name}:`, outlookError);
-          setOutlook('Unable to load player summary.');
         }
 
         // Fetch 2024 game log from our API (for backward compatibility)
@@ -904,17 +942,15 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
           console.warn(`⚠️ Failed to fetch game log for ${playerData.full_name}:`, gameLogError);
         }
 
-      } catch (err) {
-        setError('Failed to fetch player data.');
-        console.error('PlayerCardModal error:', err);
+      } catch (error) {
+        console.error('❌ Error in fetchPlayerData:', error);
+        setError('Failed to load player data.');
       } finally {
         setLoading(false);
       }
     };
 
-    if (playerId) {
-      fetchPlayerData();
-    }
+    fetchPlayerData();
   }, [playerId]);
 
   useEffect(() => {
@@ -934,11 +970,11 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-[#101010] rounded-2xl p-6 w-[1000px] h-[700px] overflow-hidden shadow-xl relative"
+        className="bg-black border border-white rounded-2xl p-6 w-[1000px] h-[700px] overflow-hidden shadow-xl relative"
         onClick={e => e.stopPropagation()}
       >
         {loading ? (
@@ -946,7 +982,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
             <LoadingArc />
           </div>
         ) : error ? (
-          <div className="w-full flex items-center justify-center text-red-500">
+          <div className="w-full flex items-center justify-center text-red-500" style={{ fontFamily: 'Consolas, monospace' }}>
             {error}
           </div>
         ) : (
@@ -963,15 +999,15 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
             <div className="flex items-center space-x-4 mb-4">
               <img
                 src={`https://sleepercdn.com/content/nfl/players/${playerId}.jpg`}
-                className="h-24 w-24 rounded-full"
+                className="h-24 w-24 rounded-full bg-black object-cover border border-white"
                 alt={player.full_name}
               />
               <div>
-                <h2 className="text-2xl font-bold text-white">{player.full_name}</h2>
-                <p className="text-sm text-gray-400">
+                <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Consolas, monospace' }}>{player.full_name}</h2>
+                <p className="text-sm text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
                   {player.team} • {player.position}
                 </p>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'Consolas, monospace' }}>
                   Age: {player.age} • Height: {player.height ? convertInchesToFeet(player.height) : 'N/A'} • Weight:{' '}
                   {player.weight} lbs • EXP: {player.years_exp} yrs • College:{' '}
                   {player.college}
@@ -982,15 +1018,15 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
             {/* Full Width Tabs */}
             <div className="flex-1 overflow-hidden">
               <Tabs defaultValue="summary" className="h-full flex flex-col">
-                <TabsList className="w-fit">
-                  <TabsTrigger value="summary">2025 Outlook</TabsTrigger>
-                  <TabsTrigger value="gamelog">Game Log</TabsTrigger>
-                  <TabsTrigger value="news">News</TabsTrigger>
-                  <TabsTrigger value="ai">AI Insights</TabsTrigger>
+                <TabsList className="w-fit bg-black border border-white">
+                  <TabsTrigger value="summary" className="text-white data-[state=active]:bg-white data-[state=active]:text-black" style={{ fontFamily: 'Consolas, monospace' }}>2025 Outlook</TabsTrigger>
+                  <TabsTrigger value="gamelog" className="text-white data-[state=active]:bg-white data-[state=active]:text-black" style={{ fontFamily: 'Consolas, monospace' }}>Game Log</TabsTrigger>
+                  <TabsTrigger value="news" className="text-white data-[state=active]:bg-white data-[state=active]:text-black" style={{ fontFamily: 'Consolas, monospace' }}>News</TabsTrigger>
+                  <TabsTrigger value="ai" className="text-white data-[state=active]:bg-white data-[state=active]:text-black" style={{ fontFamily: 'Consolas, monospace' }}>AI Insights</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="summary" className="flex-1 overflow-y-auto mt-4">
-                  <div className="text-sm text-gray-300 leading-relaxed">
+                  <div className="text-sm text-white leading-relaxed" style={{ fontFamily: 'Consolas, monospace' }}>
                     {outlook || 'Loading player outlook...'}
                   </div>
                 </TabsContent>
@@ -1008,13 +1044,13 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
                 </TabsContent>
 
                 <TabsContent value="news" className="flex-1 overflow-y-auto mt-4">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-white" style={{ fontFamily: 'Consolas, monospace' }}>
                     Recent news from Rotowire or other sources will appear here.
                   </p>
                 </TabsContent>
 
                 <TabsContent value="ai" className="flex-1 overflow-y-auto mt-4">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-white" style={{ fontFamily: 'Consolas, monospace' }}>
                     AI-generated insights coming soon.
                   </p>
                 </TabsContent>

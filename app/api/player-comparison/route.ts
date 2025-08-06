@@ -1,563 +1,747 @@
+// COMPLETE FIXED VERSION - Replace your entire file with this:
+
 import { NextResponse } from 'next/server';
-import { dataAggregator } from '@/lib/dataAggregator';
+import { dataParser } from '@/lib/dataParser';
+import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
-// Initialize OpenAI
+// Initialize clients
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-interface PlayerAnalysis {
+interface EnhancedPlayerAnalysis {
     playerId: string;
     playerName: string;
     position: string;
     team: string;
-    seasonStats: Record<string, unknown>;
-    recentGames: Record<string, unknown>[];
-    injuries: Record<string, unknown>[];
-    matchup: Record<string, unknown>;
-    projections: Record<string, unknown>;
-    qbStatus: Record<string, unknown>;
-    defenseRanking?: Record<string, unknown>;
-    weatherImpact?: {
-        severity: string;
-        impactAnalysis: Record<string, unknown>;
-        recommendations: Record<string, unknown>;
+    adpData?: any;
+    marketShare?: any;
+    redZoneData?: any;
+    coachingChange?: any;
+    rookieAnalysis?: any;
+    expertAnalysis?: string;
+    contextualInsights: string[];
+    scores: {
+        adpValue: number;
+        usage: number;
+        efficiency: number;
+        situation: number;
+        overall: number;
     };
-    espnAdvanced?: Record<string, unknown>;
 }
 
-interface ComparisonDetails {
+interface EnhancedComparisonDetails {
     player1: string;
     player2: string;
+    player3?: string;
     advantages: {
         player1: string[];
         player2: string[];
+        player3?: string[];
     };
     categories: {
-        matchup: 'player1' | 'player2' | 'tie';
-        form: 'player1' | 'player2' | 'tie';
-        ceiling: 'player1' | 'player2' | 'tie';
-        floor: 'player1' | 'player2' | 'tie';
-        weather: 'player1' | 'player2' | 'tie';
+        adpValue: 'player1' | 'player2' | 'player3' | 'tie';
+        usage: 'player1' | 'player2' | 'player3' | 'tie';
+        efficiency: 'player1' | 'player2' | 'player3' | 'tie';
+        situation: 'player1' | 'player2' | 'player3' | 'tie';
+        redZone: 'player1' | 'player2' | 'player3' | 'tie';
     };
-    overallWinner: 'player1' | 'player2' | 'tie';
+    overallWinner: 'player1' | 'player2' | 'player3' | 'tie';
     confidence: number;
-}
-
-interface PlayerRanking {
-    playerId: string;
-    playerName: string;
-    score: number;
-    rank: number;
     reasoning: string[];
 }
 
-interface ComparisonResult {
-    players: PlayerAnalysis[];
-    headToHead: {
-        player1VsPlayer2: ComparisonDetails;
-        player1VsPlayer3?: ComparisonDetails;
-        player2VsPlayer3?: ComparisonDetails;
-    };
-    rankings: {
-        overall: PlayerRanking[];
-        byCategory: {
-            matchup: PlayerRanking[];
-            form: PlayerRanking[];
-            weather: PlayerRanking[];
-            ceiling: PlayerRanking[];
-            floor: PlayerRanking[];
-        };
-    };
-    recommendation: {
-        startPlayer: string;
-        confidence: number;
-        reasoning: string[];
-        aiAnalysis: string;
-    };
-}
+class EnhancedPlayerComparison {
 
-interface ScoreSet {
-    matchup: number;
-    form: number;
-    weather: number;
-    ceiling: number;
-    floor: number;
-}
-
-// Fetch defense rankings for a team
-async function getDefenseRanking(team: string): Promise<Record<string, unknown> | null> {
-    try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/defense-rankings`);
-        if (!response.ok) return null;
-
-        const data = await response.json();
-        return data.rankings.find((ranking: Record<string, unknown>) => ranking.team === team);
-    } catch (error) {
-        console.error('Failed to fetch defense rankings:', error);
-        return null;
+    static async initialize(): Promise<void> {
+        await dataParser.initializeData();
     }
-}
 
-// Fetch weather impact for a team's location
-async function getWeatherImpact(team: string): Promise<PlayerAnalysis['weatherImpact'] | null> {
-    try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/weather/${team}`);
-        if (!response.ok) return null;
+    static async getPlayerFromDatabase(sleeperId: string): Promise<{ name: string, position: string, team: string } | null> {
+        try {
+            const { data: player } = await supabase
+                .from('players')
+                .select('name, position, team')
+                .eq('sleeper_id', sleeperId)
+                .single();
 
-        const data = await response.json();
-        return {
-            severity: data.severity,
-            impactAnalysis: data.impactAnalysis,
-            recommendations: data.recommendations
-        };
-    } catch (error) {
-        console.error('Failed to fetch weather impact:', error);
-        return null;
-    }
-}
-
-// Enhanced player analysis with defense and weather data
-async function getEnhancedPlayerAnalysis(playerId: string, week?: number): Promise<PlayerAnalysis> {
-    // Get base player analysis
-    const baseAnalysis = await dataAggregator.aggregatePlayerData(playerId, week);
-
-    // Get defense ranking for opponent
-    const defenseRanking = await getDefenseRanking(baseAnalysis.matchup?.opponent || baseAnalysis.team);
-
-    // Get weather impact for player's team
-    const weatherImpact = await getWeatherImpact(baseAnalysis.team);
-
-    // ESPN advanced stats placeholder (for future implementation)
-    const espnAdvanced = null;
-
-    return {
-        playerId: baseAnalysis.playerId,
-        playerName: baseAnalysis.playerName,
-        position: baseAnalysis.position,
-        team: baseAnalysis.team,
-        seasonStats: baseAnalysis.seasonStats,
-        recentGames: baseAnalysis.recentGames,
-        injuries: baseAnalysis.injuries,
-        matchup: baseAnalysis.matchup,
-        projections: baseAnalysis.projections,
-        qbStatus: baseAnalysis.qbStatus,
-        defenseRanking,
-        weatherImpact,
-        espnAdvanced
-    };
-}
-
-// Compare two players across different categories
-function comparePlayersHeadToHead(player1: PlayerAnalysis, player2: PlayerAnalysis): ComparisonDetails {
-    const advantages = { player1: [] as string[], player2: [] as string[] };
-    const categories = {
-        matchup: 'tie' as 'player1' | 'player2' | 'tie',
-        form: 'tie' as 'player1' | 'player2' | 'tie',
-        ceiling: 'tie' as 'player1' | 'player2' | 'tie',
-        floor: 'tie' as 'player1' | 'player2' | 'tie',
-        weather: 'tie' as 'player1' | 'player2' | 'tie'
-    };
-
-    // Matchup Analysis (Defense Rankings)
-    if (player1.defenseRanking && player2.defenseRanking) {
-        const pos = player1.position.toLowerCase();
-        const p1DefenseRank = (player1.defenseRanking[pos] as Record<string, unknown>)?.rank as number || 16;
-        const p2DefenseRank = (player2.defenseRanking[pos] as Record<string, unknown>)?.rank as number || 16;
-
-        if (p1DefenseRank > p2DefenseRank + 2) {
-            categories.matchup = 'player1';
-            advantages.player1.push(`Better matchup (defense ranks ${p1DefenseRank}th vs ${pos.toUpperCase()}s)`);
-        } else if (p2DefenseRank > p1DefenseRank + 2) {
-            categories.matchup = 'player2';
-            advantages.player2.push(`Better matchup (defense ranks ${p2DefenseRank}th vs ${pos.toUpperCase()}s)`);
+            return player;
+        } catch (error) {
+            console.error(`Failed to fetch player ${sleeperId}:`, error);
+            return null;
         }
     }
 
-    // Recent Form Analysis (Last 3 games average)
-    const p1RecentAvg = player1.recentGames.slice(0, 3).reduce((sum, game) => sum + ((game.fantasy_points as number) || 0), 0) / Math.max(1, player1.recentGames.slice(0, 3).length);
-    const p2RecentAvg = player2.recentGames.slice(0, 3).reduce((sum, game) => sum + ((game.fantasy_points as number) || 0), 0) / Math.max(1, player2.recentGames.slice(0, 3).length);
+    static generateEnhancedPlayerAnalysis(playerName: string, position: string, team: string): EnhancedPlayerAnalysis {
+        const adpData = dataParser.getPlayerADP(playerName);
+        const marketShare = dataParser.getMarketShareByPosition(playerName, position);
+        const redZoneData = dataParser.getRedZoneData(playerName, position);
+        const coachingChange = dataParser.getCoachingChange(team);
+        const rookieAnalysis = dataParser.getRookieAnalysis(playerName);
+        const expertAnalysis = dataParser.getExpertAnalysis(playerName);
 
-    if (p1RecentAvg > p2RecentAvg + 2) {
-        categories.form = 'player1';
-        advantages.player1.push(`Better recent form (${p1RecentAvg.toFixed(1)} vs ${p2RecentAvg.toFixed(1)} fantasy points)`);
-    } else if (p2RecentAvg > p1RecentAvg + 2) {
-        categories.form = 'player2';
-        advantages.player2.push(`Better recent form (${p2RecentAvg.toFixed(1)} vs ${p1RecentAvg.toFixed(1)} fantasy points)`);
+        const contextualInsights: string[] = [];
+
+        const scores = {
+            adpValue: this.calculateADPValueScore(adpData, position),
+            usage: this.calculateUsageScore(marketShare, position),
+            efficiency: this.calculateEfficiencyScore(redZoneData, marketShare, position),
+            situation: this.calculateSituationScore(coachingChange, rookieAnalysis),
+            overall: 0
+        };
+
+        // Calculate overall score (weighted for weekly performance, not draft value)
+        scores.overall = Math.round(
+            (scores.adpValue * 0.10) +     // Reduced from 0.25 - ADP less important for weekly
+            (scores.usage * 0.40) +        // Increased from 0.30 - Usage most important for weekly
+            (scores.efficiency * 0.30) +   // Increased from 0.25 - Efficiency crucial for weekly
+            (scores.situation * 0.20)      // Same - Team context still matters
+        );
+
+        // Generate insights
+        if (scores.adpValue >= 80) contextualInsights.push('excellent draft value');
+        else if (scores.adpValue >= 60) contextualInsights.push('solid draft value');
+        else if (scores.adpValue <= 40) contextualInsights.push('expensive for expected return');
+
+        if (scores.usage >= 80) contextualInsights.push('elite usage rate');
+        else if (scores.usage >= 60) contextualInsights.push('good usage rate');
+        else if (scores.usage <= 40) contextualInsights.push('limited usage opportunities');
+
+        if (scores.efficiency >= 80) contextualInsights.push('elite efficiency metrics');
+        else if (scores.efficiency >= 60) contextualInsights.push('solid efficiency');
+
+        if (rookieAnalysis) {
+            contextualInsights.push(`rookie with ${rookieAnalysis.draftRound === 1 ? 'high' : 'moderate'} expectations`);
+        }
+
+        if (coachingChange) {
+            contextualInsights.push(`coaching change impact (${coachingChange.newCoach})`);
+        }
+
+        return {
+            playerId: playerName,
+            playerName,
+            position,
+            team,
+            adpData,
+            marketShare,
+            redZoneData,
+            coachingChange,
+            rookieAnalysis,
+            expertAnalysis,
+            contextualInsights,
+            scores
+        };
     }
 
-    // Season Stats Comparison (Ceiling - best game)
-    const p1BestGame = Math.max(...player1.recentGames.map(g => (g.fantasy_points as number) || 0));
-    const p2BestGame = Math.max(...player2.recentGames.map(g => (g.fantasy_points as number) || 0));
+    static calculateADPValueScore(adpData: any, position: string): number {
+        if (!adpData) return 50;
 
-    if (p1BestGame > p2BestGame + 3) {
-        categories.ceiling = 'player1';
-        advantages.player1.push(`Higher ceiling (${p1BestGame.toFixed(1)} point best game)`);
-    } else if (p2BestGame > p1BestGame + 3) {
-        categories.ceiling = 'player2';
-        advantages.player2.push(`Higher ceiling (${p2BestGame.toFixed(1)} point best game)`);
+        const adp = adpData.ppr;
+
+        if (position === 'QB') {
+            if (adp <= 36) return 85;
+            if (adp <= 72) return 70;
+            if (adp <= 120) return 80;
+            return 60;
+        } else if (position === 'RB') {
+            if (adp <= 24) return 75;
+            if (adp <= 48) return 80;
+            if (adp <= 84) return 70;
+            return 65;
+        } else if (['WR', 'TE'].includes(position)) {
+            if (adp <= 36) return 80;
+            if (adp <= 72) return 75;
+            if (adp <= 120) return 85;
+            return 60;
+        }
+
+        return 50;
     }
 
-    // Floor Analysis (worst game in recent stretch)
-    const p1WorstGame = Math.min(...player1.recentGames.map(g => (g.fantasy_points as number) || 0));
-    const p2WorstGame = Math.min(...player2.recentGames.map(g => (g.fantasy_points as number) || 0));
+    static calculateUsageScore(marketShare: any, position: string): number {
+        if (!marketShare) return 40;
 
-    if (p1WorstGame > p2WorstGame + 2) {
-        categories.floor = 'player1';
-        advantages.player1.push(`Higher floor (${p1WorstGame.toFixed(1)} point worst game)`);
-    } else if (p2WorstGame > p1WorstGame + 2) {
-        categories.floor = 'player2';
-        advantages.player2.push(`Higher floor (${p2WorstGame.toFixed(1)} point worst game)`);
+        let primaryUsage = 0;
+
+        if (position === 'RB') {
+            primaryUsage = Math.max(marketShare.attPercent || 0, marketShare.tgtPercent || 0);
+        } else if (['WR', 'TE'].includes(position)) {
+            primaryUsage = marketShare.tgtPercent || 0;
+        }
+
+        if (primaryUsage >= 70) return 95;
+        if (primaryUsage >= 50) return 85;
+        if (primaryUsage >= 30) return 70;
+        if (primaryUsage >= 15) return 55;
+        return 35;
     }
 
-    // Weather Impact Analysis
-    if (player1.weatherImpact && player2.weatherImpact) {
-        // Only mention weather if it's truly severe
-        const p1Severe = player1.weatherImpact.severity === 'EXTREME' || player1.weatherImpact.severity === 'SEVERE';
-        const p2Severe = player2.weatherImpact.severity === 'EXTREME' || player2.weatherImpact.severity === 'SEVERE';
+    static calculateEfficiencyScore(redZoneData: any, marketShare: any, position: string): number {
+        if (!redZoneData && !marketShare) return 50;
 
-        if (p1Severe || p2Severe) {
-            const p1Impact = getWeatherScore(player1.weatherImpact, player1.position, player1.team, 'TBD');
-            const p2Impact = getWeatherScore(player2.weatherImpact, player2.position, player2.team, 'TBD');
+        let efficiencyScore = 50;
 
-            if (p1Impact > p2Impact) {
-                categories.weather = 'player1';
-                advantages.player1.push(`Better weather conditions (${player2.weatherImpact.severity.toLowerCase()} conditions expected for opponent)`);
-            } else if (p2Impact > p1Impact) {
-                categories.weather = 'player2';
-                advantages.player2.push(`Better weather conditions (${player1.weatherImpact.severity.toLowerCase()} conditions expected for opponent)`);
+        if (redZoneData) {
+            const rzEfficiency = redZoneData.rzTdPercent || 0;
+            if (rzEfficiency >= 80) efficiencyScore += 25;
+            else if (rzEfficiency >= 60) efficiencyScore += 15;
+            else if (rzEfficiency >= 40) efficiencyScore += 5;
+            else efficiencyScore -= 10;
+
+            if (redZoneData.glTdPercent >= 70) efficiencyScore += 10;
+        }
+
+        if (marketShare) {
+            const opportunities = (marketShare.attPercent || 0) + (marketShare.tgtPercent || 0);
+
+            if (opportunities > 0) {
+                const efficiencyRatio = (marketShare.rbPointsPercent || marketShare.recPercent || 0) / opportunities;
+                if (efficiencyRatio >= 1.2) efficiencyScore += 15;
+                else if (efficiencyRatio >= 1.0) efficiencyScore += 10;
+                else if (efficiencyRatio >= 0.8) efficiencyScore += 5;
             }
         }
+
+        return Math.min(Math.max(efficiencyScore, 0), 100);
     }
 
-    // Overall winner based on category wins
-    const p1Wins = Object.values(categories).filter(winner => winner === 'player1').length;
-    const p2Wins = Object.values(categories).filter(winner => winner === 'player2').length;
+    static calculateSituationScore(coachingChange: any, rookieAnalysis: any): number {
+        let situationScore = 60;
 
-    let overallWinner: 'player1' | 'player2' | 'tie' = 'tie';
-    let confidence = 50;
-
-    if (p1Wins > p2Wins) {
-        overallWinner = 'player1';
-        confidence = 50 + (p1Wins - p2Wins) * 15;
-    } else if (p2Wins > p1Wins) {
-        overallWinner = 'player2';
-        confidence = 50 + (p2Wins - p1Wins) * 15;
-    }
-
-    return {
-        player1: player1.playerName,
-        player2: player2.playerName,
-        advantages,
-        categories,
-        overallWinner,
-        confidence: Math.min(confidence, 85)
-    };
-}
-
-// Teams that play in domed stadiums (weather doesn't matter)
-const DOME_TEAMS = [
-    'NO',   // New Orleans Saints
-    'MIN',  // Minnesota Vikings  
-    'LV',   // Las Vegas Raiders
-    'LAC',  // Los Angeles Chargers
-    'HOU',  // Houston Texans
-    'ARI',  // Arizona Cardinals
-    'ATL',  // Atlanta Falcons
-    'DET',  // Detroit Lions
-    'IND'   // Indianapolis Colts
-];
-
-function isGameInDome(team: string, opponent: string): boolean {
-    return DOME_TEAMS.includes(team) || DOME_TEAMS.includes(opponent);
-}
-
-// Get Week 1 opponent for a team
-function getWeek1Opponent(team: string): string {
-    const week1Matchups: Record<string, string> = {
-        'WAS': 'vs TB',   // Washington vs Tampa Bay
-        'JAX': '@ MIA',   // Jacksonville @ Miami
-        'TB': '@ WAS',    // Tampa Bay @ Washington  
-        'MIA': 'vs JAX',  // Miami vs Jacksonville
-        'BUF': 'vs NYJ',  // Buffalo vs New York Jets
-        'NYJ': '@ BUF',   // New York Jets @ Buffalo
-        'NE': 'vs PIT',   // New England vs Pittsburgh
-        'PIT': '@ NE',    // Pittsburgh @ New England
-        // Add more as you get the real 2025 schedule
-    };
-
-    return week1Matchups[team] || 'TBD';
-}
-
-function getWeatherScore(weather: PlayerAnalysis['weatherImpact'], position: string, team: string = 'TBD', opponent: string = 'TBD'): number {
-    // If game is in a dome, weather has no impact
-    if (team !== 'TBD' && opponent !== 'TBD' && isGameInDome(team, opponent)) {
-        return 50; // Neutral score
-    }
-
-    let score = 50; // Neutral baseline
-
-    if (!weather) return score;
-
-    const { severity, impactAnalysis } = weather;
-
-    // Reduced weather impact (less severe penalties)
-    if (position === 'QB') {
-        if ((impactAnalysis.passingImpact as string) === 'SEVERE') score -= 8; // Reduced from 20
-        else if ((impactAnalysis.passingImpact as string) === 'HIGH') score -= 5; // Reduced from 15
-        else if ((impactAnalysis.passingImpact as string) === 'MODERATE') score -= 3; // Reduced from 10
-    } else if (position === 'RB') {
-        if ((impactAnalysis.gameScript as string) === 'RUN_HEAVY') score += 5; // Reduced from 15
-        if ((impactAnalysis.turnoverRisk as string) === 'HIGH' || (impactAnalysis.turnoverRisk as string) === 'SEVERE') score -= 3; // Reduced from 10
-    } else if (position === 'WR' || position === 'TE') {
-        if ((impactAnalysis.passingImpact as string) === 'SEVERE') score -= 6; // Reduced from 15
-        else if ((impactAnalysis.passingImpact as string) === 'HIGH') score -= 4; // Reduced from 10
-        else if ((impactAnalysis.passingImpact as string) === 'MODERATE') score -= 2; // Reduced from 5
-    }
-
-    return score;
-}
-
-// Generate rankings for all players
-function generateRankings(players: PlayerAnalysis[]): ComparisonResult['rankings'] {
-    const rankings = {
-        overall: [] as PlayerRanking[],
-        byCategory: {
-            matchup: [] as PlayerRanking[],
-            form: [] as PlayerRanking[],
-            weather: [] as PlayerRanking[],
-            ceiling: [] as PlayerRanking[],
-            floor: [] as PlayerRanking[]
+        if (coachingChange) {
+            if (coachingChange.fantasyImpact.toLowerCase().includes('offense') ||
+                coachingChange.fantasyImpact.toLowerCase().includes('production')) {
+                situationScore += 15;
+            } else {
+                situationScore += 5;
+            }
         }
-    };
 
-    // Calculate scores for each category
-    players.forEach(player => {
-        const scores: ScoreSet = {
-            matchup: calculateMatchupScore(player),
-            form: calculateFormScore(player),
-            weather: getWeatherScore(player.weatherImpact, player.position, player.team, 'TBD'),
-            ceiling: calculateCeilingScore(player),
-            floor: calculateFloorScore(player)
+        if (rookieAnalysis) {
+            if (rookieAnalysis.draftRound === 1) {
+                situationScore += 20;
+            } else if (rookieAnalysis.draftRound <= 3) {
+                situationScore += 10;
+            } else {
+                situationScore -= 5;
+            }
+        } else {
+            situationScore += 10;
+        }
+
+        return Math.min(Math.max(situationScore, 0), 100);
+    }
+
+    static comparePlayersEnhanced(players: EnhancedPlayerAnalysis[]): EnhancedComparisonDetails {
+        if (players.length < 2) {
+            throw new Error('Need at least 2 players to compare');
+        }
+
+        const [player1, player2, player3] = players;
+
+        const categories = {
+            adpValue: this.determineWinner(players, 'adpValue'),
+            usage: this.determineWinner(players, 'usage'),
+            efficiency: this.determineWinner(players, 'efficiency'),
+            situation: this.determineWinner(players, 'situation'),
+            redZone: this.determineRedZoneWinner(players)
         };
 
-        // Overall score (weighted average) - UPDATED WEIGHTS
-        const overallScore =
-            scores.matchup * 0.30 +    // Increased from 0.25
-            scores.form * 0.35 +       // Increased from 0.30  
-            scores.weather * 0.05 +    // Decreased from 0.15 ⭐ KEY CHANGE
-            scores.ceiling * 0.15 +
-            scores.floor * 0.15;
+        const overallWinner = this.determineWinner(players, 'overall');
 
-        rankings.overall.push({
-            playerId: player.playerId,
-            playerName: player.playerName,
-            score: overallScore,
-            rank: 0,
-            reasoning: generateReasoningForPlayer(player, scores)
+        const scores = players.map(p => p.scores.overall);
+        const maxScore = Math.max(...scores);
+        const secondMax = scores.sort((a, b) => b - a)[1];
+        const confidence = Math.min(95, Math.max(55, maxScore - secondMax + 50));
+
+        const advantages = this.generateAdvantages(players);
+        const reasoning = this.generateReasoning(players, categories, overallWinner);
+
+        return {
+            player1: player1.playerName,
+            player2: player2.playerName,
+            player3: player3?.playerName,
+            advantages,
+            categories,
+            overallWinner,
+            confidence,
+            reasoning
+        };
+    }
+
+    static determineWinner(players: EnhancedPlayerAnalysis[], category: keyof EnhancedPlayerAnalysis['scores']): 'player1' | 'player2' | 'player3' | 'tie' {
+        const scores = players.map(p => p.scores[category]);
+        const maxScore = Math.max(...scores);
+        const winners = scores.map((score, index) => score === maxScore ? index : -1).filter(i => i !== -1);
+
+        // If tied, use tiebreaker logic
+        if (winners.length > 1) {
+            console.log(`🤝 Tie detected in ${category}, using tiebreakers...`);
+
+            // Tiebreaker 1: Efficiency score
+            if (category !== 'efficiency') {
+                const efficiencyScores = winners.map(i => players[i].scores.efficiency);
+                const maxEff = Math.max(...efficiencyScores);
+                const effWinners = winners.filter(i => players[i].scores.efficiency === maxEff);
+                if (effWinners.length === 1) {
+                    const winnerIndex = effWinners[0];
+                    return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
+                }
+            }
+
+            // Tiebreaker 2: Usage score
+            if (category !== 'usage') {
+                const usageScores = winners.map(i => players[i].scores.usage);
+                const maxUsage = Math.max(...usageScores);
+                const usageWinners = winners.filter(i => players[i].scores.usage === maxUsage);
+                if (usageWinners.length === 1) {
+                    const winnerIndex = usageWinners[0];
+                    return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
+                }
+            }
+
+            // Tiebreaker 3: ADP Value (lower ADP = better)
+            if (category !== 'adpValue') {
+                const adpValues = winners.map(i => players[i].adpData?.ppr || 999);
+                const minADP = Math.min(...adpValues);
+                const adpWinners = winners.filter(i => (players[i].adpData?.ppr || 999) === minADP);
+                if (adpWinners.length === 1) {
+                    const winnerIndex = adpWinners[0];
+                    return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
+                }
+            }
+
+            // Final tiebreaker: Prefer player1 (first in comparison)
+            console.log(`🎲 Using final tiebreaker: player1`);
+            return 'player1';
+        }
+
+        const winnerIndex = winners[0];
+        return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
+    }
+
+    static determineRedZoneWinner(players: EnhancedPlayerAnalysis[]): 'player1' | 'player2' | 'player3' | 'tie' {
+        const redZoneScores = players.map(p => {
+            if (!p.redZoneData) return 0;
+            return p.redZoneData.rzTdPercent + (p.redZoneData.rzTouchdowns / 5);
         });
 
-        // Category-specific rankings
-        Object.entries(scores).forEach(([category, score]) => {
-            rankings.byCategory[category as keyof typeof rankings.byCategory].push({
-                playerId: player.playerId,
-                playerName: player.playerName,
-                score,
-                rank: 0,
-                reasoning: []
+        const maxScore = Math.max(...redZoneScores);
+        if (maxScore === 0) return 'tie';
+
+        const winnerIndex = redZoneScores.indexOf(maxScore);
+        return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
+    }
+
+    static generateAdvantages(players: EnhancedPlayerAnalysis[]): any {
+        const advantages: any = {
+            player1: [],
+            player2: [],
+        };
+
+        if (players[2]) advantages.player3 = [];
+
+        players.forEach((player, index) => {
+            const playerKey = index === 0 ? 'player1' : index === 1 ? 'player2' : 'player3';
+
+            if (player.scores.adpValue >= 80) {
+                advantages[playerKey].push(`Excellent draft value (ADP ${player.adpData?.ppr})`);
+            }
+
+            if (player.scores.usage >= 80) {
+                const usage = player.marketShare?.attPercent || player.marketShare?.tgtPercent || 0;
+                advantages[playerKey].push(`Elite usage rate (${usage}% of team opportunities)`);
+            }
+
+            if (player.redZoneData && player.redZoneData.rzTdPercent >= 70) {
+                advantages[playerKey].push(`Elite red zone efficiency (${player.redZoneData.rzTdPercent}% TD rate)`);
+            }
+
+            player.contextualInsights.forEach(insight => {
+                if (insight.includes('elite') || insight.includes('excellent')) {
+                    advantages[playerKey].push(insight);
+                }
             });
         });
-    });
 
-    // Sort and assign ranks
-    rankings.overall.sort((a, b) => b.score - a.score);
-    rankings.overall.forEach((player, index) => player.rank = index + 1);
+        return advantages;
+    }
 
-    Object.keys(rankings.byCategory).forEach(category => {
-        const categoryRankings = rankings.byCategory[category as keyof typeof rankings.byCategory];
-        categoryRankings.sort((a, b) => b.score - a.score);
-        categoryRankings.forEach((player, index) => player.rank = index + 1);
-    });
+    static generateReasoning(players: EnhancedPlayerAnalysis[], categories: any, winner: string): string[] {
+        const winnerPlayer = winner === 'player1' ? players[0] : winner === 'player2' ? players[1] : players[2];
 
-    return rankings;
-}
+        if (!winnerPlayer) return ['Comparison analysis unavailable'];
 
-// Helper functions for scoring
-function calculateMatchupScore(player: PlayerAnalysis): number {
-    if (!player.defenseRanking) return 50;
+        const reasons: string[] = [];
 
-    const pos = player.position.toLowerCase();
-    const defenseRank = (player.defenseRanking[pos] as Record<string, unknown>)?.rank as number || 16;
+        // Check if it's a close matchup
+        const scores = players.map(p => p.scores.overall);
+        const maxScore = Math.max(...scores);
+        const secondMax = scores.sort((a, b) => b - a)[1];
+        const scoreDifference = maxScore - secondMax;
 
-    return Math.min(90, 30 + (defenseRank * 2));
-}
+        if (scoreDifference <= 10) {
+            reasons.push(`${winnerPlayer.playerName} has a slight edge in this close matchup (${winnerPlayer.scores.overall}/100)`);
 
-function calculateFormScore(player: PlayerAnalysis): number {
-    if (!player.recentGames.length) return 50;
+            // For close matchups, focus on weekly factors
+            const categoryWins = Object.values(categories).filter(cat => cat === winner).length;
+            const totalCategories = Object.keys(categories).length;
 
-    const recentAvg = player.recentGames.slice(0, 3)
-        .reduce((sum, game) => sum + ((game.fantasy_points as number) || 0), 0) /
-        Math.max(1, player.recentGames.slice(0, 3).length);
+            if (categoryWins >= 3) {
+                reasons.push(`Holds advantages in ${categoryWins} of ${totalCategories} key areas`);
+            } else {
+                reasons.push(`Very competitive matchup with marginal differences`);
+            }
+        } else {
+            reasons.push(`${winnerPlayer.playerName} emerges as the stronger start with ${winnerPlayer.scores.overall}/100`);
 
-    return Math.min(90, Math.max(10, recentAvg * 3));
-}
+            const categoryWins = Object.values(categories).filter(cat => cat === winner).length;
+            reasons.push(`Clear advantages in ${categoryWins} out of 5 key categories`);
+        }
 
-function calculateCeilingScore(player: PlayerAnalysis): number {
-    if (!player.recentGames.length) return 50;
+        // Focus on weekly performance factors (remove ADP completely)
+        if (winnerPlayer.scores.usage >= 70) {
+            const usage = winnerPlayer.marketShare?.attPercent || winnerPlayer.marketShare?.tgtPercent || 0;
+            if (usage > 0) {
+                if (usage >= 50) {
+                    reasons.push(`High-volume role with ${usage}% team usage for consistent touches`);
+                } else {
+                    reasons.push(`Solid ${usage}% team usage provides weekly floor`);
+                }
+            } else {
+                reasons.push(`Projected for increased weekly opportunity share`);
+            }
+        }
 
-    const bestGame = Math.max(...player.recentGames.map(g => (g.fantasy_points as number) || 0));
-    return Math.min(90, Math.max(10, bestGame * 2.5));
-}
+        // Red zone opportunities (weekly scoring potential)
+        if (winnerPlayer.redZoneData && winnerPlayer.redZoneData.rzTdPercent >= 60) {
+            reasons.push(`Strong red zone role (${winnerPlayer.redZoneData.rzTdPercent}% conversion rate) boosts touchdown ceiling`);
+        } else if (winnerPlayer.redZoneData && winnerPlayer.redZoneData.rzTouchdowns >= 5) {
+            reasons.push(`Proven red zone producer with ${winnerPlayer.redZoneData.rzTouchdowns} TDs in 2024`);
+        }
 
-function calculateFloorScore(player: PlayerAnalysis): number {
-    if (!player.recentGames.length) return 50;
+        // Team situation factors (weekly game script impact)
+        if (winnerPlayer.coachingChange) {
+            reasons.push(`Potential scheme upgrade under new coaching staff`);
+        }
 
-    const worstGame = Math.min(...player.recentGames.map(g => (g.fantasy_points as number) || 0));
-    return Math.min(90, Math.max(10, 30 + (worstGame * 4)));
-}
+        if (winnerPlayer.rookieAnalysis) {
+            reasons.push(`Emerging opportunity for increased weekly involvement`);
+        }
 
-function generateReasoningForPlayer(player: PlayerAnalysis, scores: ScoreSet): string[] {
-    const reasoning: string[] = [];
+        // Add relevant weekly performance insights
+        const weeklyInsights = winnerPlayer.contextualInsights.filter(insight =>
+            !insight.includes('draft') &&
+            !insight.includes('adp') &&
+            !insight.includes('round') &&
+            (insight.includes('usage') || insight.includes('efficiency') || insight.includes('opportunity'))
+        );
 
-    if (scores.matchup > 70) reasoning.push("Excellent matchup against weak defense");
-    else if (scores.matchup < 40) reasoning.push("Tough matchup against strong defense");
-
-    if (scores.form > 70) reasoning.push("Strong recent performance trend");
-    else if (scores.form < 40) reasoning.push("Struggling in recent games");
-
-    if (scores.weather < 40) reasoning.push("Weather conditions may negatively impact performance");
-    else if (scores.weather > 60) reasoning.push("Weather conditions favor this player");
-
-    if (scores.ceiling > 70) reasoning.push("High upside potential this week");
-    if (scores.floor > 60) reasoning.push("Safe floor with consistent production");
-
-    return reasoning;
-}
-
-// Generate AI analysis using OpenAI
-async function generateAIAnalysis(players: PlayerAnalysis[], rankings: ComparisonResult['rankings']): Promise<string> {
-    try {
-        const topPlayer = rankings.overall[0];
-        const secondPlayer = rankings.overall[1];
-
-        const playerSummaries = players.map(player => {
-            const recentAvg = player.recentGames.slice(0, 3).reduce((sum, game) => sum + ((game.fantasy_points as number) || 0), 0) / Math.max(1, player.recentGames.slice(0, 3).length);
-
-            // Get Week 1 opponent
-            const week1Opponent = getWeek1Opponent(player.team);
-
-            // Determine if weather should be mentioned (only if severe)
-            const shouldMentionWeather = player.weatherImpact?.severity === 'EXTREME' || player.weatherImpact?.severity === 'SEVERE';
-            const weatherNote = shouldMentionWeather ? ` Weather could be a factor with ${player.weatherImpact?.severity.toLowerCase()} conditions expected.` : '';
-
-            // Only mention injuries if we have real injury data showing problems
-            const hasInjuryConcerns = player.injuries.some(injury => injury.status !== 'Healthy' && injury.status !== 'Active');
-            const injuryNote = hasInjuryConcerns ? ' Has injury concerns.' : '';
-
-            return `${player.playerName} (${player.position}, ${player.team}) faces ${week1Opponent} in Week 1. Coming off the 2024 season, ${player.playerName} averaged ${recentAvg.toFixed(1)} fantasy points in his final 3 games.${injuryNote}${weatherNote}`;
-        }).join('\n\n');
-
-        // Explain what our scoring system means
-        const scoringExplanation = `Our analysis scoring system rated ${topPlayer.playerName} at ${topPlayer.score.toFixed(1)} points compared to ${secondPlayer.playerName}'s ${secondPlayer.score.toFixed(1)} points based on recent form (35%), matchup strength (30%), ceiling potential (15%), floor consistency (15%), and weather impact (5%).`;
-
-        const confidencePercentage = Math.round(topPlayer.score);
-
-        const prompt = `Analyze these fantasy football players for Week 1 2025 start/sit decisions:
-
-${playerSummaries}
-
-${scoringExplanation}
-
-Provide a detailed 4-5 sentence recommendation explaining:
-1. Who to start and why (mention their specific Week 1 opponent)  
-2. Key statistical advantages from the 2024 season
-3. Why the other player ranks lower
-4. Your confidence level as exactly ${confidencePercentage}% confidence
-
-Focus on actionable fantasy advice with specific details about opponents and 2024 season performance trends. Don't mention weather unless it's truly severe (EXTREME/SEVERE). Don't mention injuries unless there are confirmed concerns. Use the exact phrase "${confidencePercentage}% confidence" in your response.`;
-
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 350,
-            temperature: 0.7,
+        weeklyInsights.forEach(insight => {
+            if (insight.includes('elite') || insight.includes('high') || insight.includes('solid')) {
+                reasons.push(insight.charAt(0).toUpperCase() + insight.slice(1));
+            }
         });
 
-        return completion.choices[0]?.message?.content || "AI analysis unavailable";
-    } catch (error) {
-        console.error('AI analysis failed:', error);
-        return "AI analysis unavailable due to an error.";
+        // Ensure we have at least 3 reasons
+        if (reasons.length < 3) {
+            if (winnerPlayer.position === 'RB') {
+                reasons.push(`Running back usage typically provides weekly consistency`);
+            } else if (winnerPlayer.position === 'WR') {
+                reasons.push(`Wide receiver target share offers weekly upside potential`);
+            } else if (winnerPlayer.position === 'TE') {
+                reasons.push(`Tight end role provides weekly floor in target-limited position`);
+            } else if (winnerPlayer.position === 'QB') {
+                reasons.push(`Quarterback position offers highest weekly fantasy ceiling`);
+            }
+        }
+
+        return reasons.slice(0, 5); // Limit to 5 key reasons
+    }
+
+    static async generateAIAnalysis(comparison: EnhancedComparisonDetails, players: EnhancedPlayerAnalysis[]): Promise<string> {
+        const winner = comparison.overallWinner;
+        const winnerPlayer = winner === 'player1' ? players[0] : winner === 'player2' ? players[1] : players[2];
+
+        if (!winnerPlayer) return 'AI analysis unavailable';
+
+        const systemPrompt = `You are an expert fantasy football analyst providing Week 1 start/sit recommendations for the 2025 NFL season. 
+
+CRITICAL CONTEXT FOR WEEK 1 ANALYSIS:
+- This is Week 1 of the 2025 season - no 2025 game data exists yet
+- Base your analysis entirely on FULL 2024 season performance data
+- Do NOT focus on recent games or "hot streaks" from late 2024
+- Emphasize season-long usage patterns, consistency, and role security
+- Consider how 2024 full-season performance translates to Week 1 expectations
+- Account for any coaching changes or team situation shifts entering 2025
+
+APPROACH:
+- Use specific 2024 season statistics and usage data
+- Focus on weekly fantasy production reliability over the full season
+- Avoid recent bias - treat all 2024 data equally, not just final games
+- Be decisive but acknowledge Week 1 uncertainty when both players are close`;
+
+        let userPrompt = `WEEK 1 START/SIT ANALYSIS (Based on 2024 Full Season Data):\n\n`;
+
+        players.forEach((player, index) => {
+            const playerNum = index + 1;
+            userPrompt += `PLAYER ${playerNum}: ${player.playerName} (${player.position}, ${player.team})\n`;
+            userPrompt += `- Weekly Performance Score: ${player.scores.overall}/100\n`;
+
+            // Remove ADP from AI analysis since it's not relevant for start/sit
+            if (player.marketShare) {
+                const usage = player.marketShare.attPercent || player.marketShare.tgtPercent || 0;
+                userPrompt += `- 2024 Season Usage: ${usage}% of team opportunities (full season average)\n`;
+            }
+
+            if (player.redZoneData) {
+                userPrompt += `- 2024 Red Zone Production: ${player.redZoneData.rzTouchdowns} TDs on ${player.redZoneData.rzAttempts} attempts (${player.redZoneData.rzTdPercent}% rate)\n`;
+            }
+
+            // Add team context for 2025
+            if (player.coachingChange) {
+                userPrompt += `- 2025 Context: New coaching staff under ${player.coachingChange.newCoach}\n`;
+            }
+
+            if (player.rookieAnalysis) {
+                userPrompt += `- 2025 Context: Rookie entering second season with established role\n`;
+            }
+
+            userPrompt += `- Performance Profile: ${player.contextualInsights.join(', ')}\n\n`;
+        });
+
+        userPrompt += `RECOMMENDED START: ${winnerPlayer.playerName}\n`;
+        userPrompt += `ANALYSIS CONFIDENCE: ${comparison.confidence}%\n\n`;
+
+        userPrompt += `INSTRUCTIONS:
+Provide a decisive Week 1 start/sit recommendation explaining why ${winnerPlayer.playerName} is the better choice for Week 1. 
+
+Focus on:
+1. How their 2024 full-season performance translates to Week 1 expectations
+2. Weekly fantasy production reliability and floor/ceiling based on 2024 data
+3. Team role security and usage patterns from 2024
+4. Any 2025 situation changes that impact Week 1 specifically
+
+Keep under 130 words and be specific about why this choice makes sense for Week 1 specifically.`;
+
+        try {
+            const response = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                max_tokens: 200,
+                temperature: 0.7,
+            });
+
+            return response.choices[0]?.message?.content || 'AI analysis unavailable';
+        } catch (error) {
+            console.error('Error generating AI analysis:', error);
+            return 'AI analysis unavailable due to technical error';
+        }
     }
 }
 
+// Main API endpoint
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const player1Id = searchParams.get('player1');
         const player2Id = searchParams.get('player2');
         const player3Id = searchParams.get('player3');
-        const week = searchParams.get('week');
+
+        console.log('🔍 Comparison request:', { player1Id, player2Id, player3Id });
 
         if (!player1Id || !player2Id) {
-            return NextResponse.json(
-                { error: 'At least two player IDs are required (player1, player2)' },
-                { status: 400 }
+            return NextResponse.json({ error: 'player1 and player2 parameters are required' }, { status: 400 });
+        }
+
+        // Initialize enhanced data
+        console.log('🔄 Initializing enhanced player comparison...');
+        await EnhancedPlayerComparison.initialize();
+
+        // Get player info from database using Sleeper IDs
+        console.log('🔍 Looking up players in database...');
+        const player1Info = await EnhancedPlayerComparison.getPlayerFromDatabase(player1Id);
+        const player2Info = await EnhancedPlayerComparison.getPlayerFromDatabase(player2Id);
+        const player3Info = player3Id ? await EnhancedPlayerComparison.getPlayerFromDatabase(player3Id) : null;
+
+        console.log('👤 Player lookup results:', {
+            player1Info,
+            player2Info,
+            player3Info
+        });
+
+        if (!player1Info || !player2Info) {
+            console.error('❌ Players not found in database');
+            return NextResponse.json({
+                error: 'One or more players not found in database',
+                details: {
+                    player1Found: !!player1Info,
+                    player2Found: !!player2Info,
+                    player1Id,
+                    player2Id
+                }
+            }, { status: 404 });
+        }
+
+        // Generate enhanced analysis for each player
+        console.log('🧠 Generating enhanced analysis...');
+        const players: EnhancedPlayerAnalysis[] = [];
+
+        try {
+            const player1Analysis = EnhancedPlayerComparison.generateEnhancedPlayerAnalysis(
+                player1Info.name,
+                player1Info.position,
+                player1Info.team
             );
+            console.log('✅ Player 1 analysis:', {
+                name: player1Analysis.playerName,
+                scores: player1Analysis.scores,
+                insights: player1Analysis.contextualInsights
+            });
+            players.push(player1Analysis);
+
+            const player2Analysis = EnhancedPlayerComparison.generateEnhancedPlayerAnalysis(
+                player2Info.name,
+                player2Info.position,
+                player2Info.team
+            );
+            console.log('✅ Player 2 analysis:', {
+                name: player2Analysis.playerName,
+                scores: player2Analysis.scores,
+                insights: player2Analysis.contextualInsights
+            });
+            players.push(player2Analysis);
+
+            if (player3Info) {
+                const player3Analysis = EnhancedPlayerComparison.generateEnhancedPlayerAnalysis(
+                    player3Info.name,
+                    player3Info.position,
+                    player3Info.team
+                );
+                console.log('✅ Player 3 analysis:', {
+                    name: player3Analysis.playerName,
+                    scores: player3Analysis.scores,
+                    insights: player3Analysis.contextualInsights
+                });
+                players.push(player3Analysis);
+            }
+        } catch (analysisError) {
+            console.error('❌ Error generating player analysis:', analysisError);
+            return NextResponse.json({
+                error: 'Failed to generate player analysis',
+                details: analysisError instanceof Error ? analysisError.message : 'Unknown analysis error'
+            }, { status: 500 });
         }
 
-        console.log(`🔍 Starting player comparison: ${player1Id} vs ${player2Id}${player3Id ? ` vs ${player3Id}` : ''}`);
-
-        // Gather enhanced analysis for all players
-        const playerIds = [player1Id, player2Id, player3Id].filter(Boolean) as string[];
-        const players = await Promise.all(
-            playerIds.map(id => getEnhancedPlayerAnalysis(id, week ? parseInt(week) : undefined))
-        );
-
-        console.log(`✅ Gathered analysis for ${players.length} players`);
-
-        // Generate head-to-head comparisons
-        const headToHead: ComparisonResult['headToHead'] = {
-            player1VsPlayer2: comparePlayersHeadToHead(players[0], players[1])
-        };
-
-        if (players[2]) {
-            headToHead.player1VsPlayer3 = comparePlayersHeadToHead(players[0], players[2]);
-            headToHead.player2VsPlayer3 = comparePlayersHeadToHead(players[1], players[2]);
-        }
-
-        // Generate rankings
-        const rankings = generateRankings(players);
+        // Generate enhanced comparison
+        console.log('⚖️ Generating comparison...');
+        const comparison = EnhancedPlayerComparison.comparePlayersEnhanced(players);
+        console.log('✅ Comparison result:', {
+            winner: comparison.overallWinner,
+            confidence: comparison.confidence,
+            categories: comparison.categories
+        });
 
         // Generate AI analysis
-        const aiAnalysis = await generateAIAnalysis(players, rankings);
+        console.log('🤖 Generating AI analysis...');
+        const aiAnalysis = await EnhancedPlayerComparison.generateAIAnalysis(comparison, players);
+        console.log('✅ AI analysis generated:', aiAnalysis.substring(0, 100) + '...');
 
-        // Final recommendation
-        const topPlayer = rankings.overall[0];
-        const recommendation = {
-            startPlayer: topPlayer.playerName,
-            confidence: Math.round(topPlayer.score),
-            reasoning: topPlayer.reasoning,
-            aiAnalysis
+        const winnerPlayer = comparison.overallWinner === 'player1' ? players[0] :
+            comparison.overallWinner === 'player2' ? players[1] : players[2];
+
+        // Sort players by overall score for rankings
+        const sortedPlayers = [...players].sort((a, b) => b.scores.overall - a.scores.overall);
+
+        // Create category rankings
+        const categoryRankings = {
+            adpValue: [...players].sort((a, b) => b.scores.adpValue - a.scores.adpValue),
+            usage: [...players].sort((a, b) => b.scores.usage - a.scores.usage),
+            efficiency: [...players].sort((a, b) => b.scores.efficiency - a.scores.efficiency),
+            situation: [...players].sort((a, b) => b.scores.situation - a.scores.situation),
         };
 
-        const result: ComparisonResult = {
-            players,
-            headToHead,
-            rankings,
-            recommendation
+        const response = {
+            players: players.map(p => ({
+                name: p.playerName,
+                position: p.position,
+                team: p.team,
+                scores: p.scores,
+                insights: p.contextualInsights,
+                adp: p.adpData?.ppr,
+                usage: p.marketShare ? (p.marketShare.attPercent || p.marketShare.tgtPercent) : null,
+                redZoneTDs: p.redZoneData?.rzTouchdowns || null
+            })),
+            headToHead: comparison,
+            rankings: {
+                overall: sortedPlayers.map((p, index) => ({
+                    playerId: p.playerName,
+                    playerName: p.playerName,
+                    rank: index + 1,
+                    score: p.scores.overall,
+                    overallScore: p.scores.overall,
+                    matchupScore: p.scores.situation,
+                    formScore: p.scores.usage,
+                    ceilingScore: p.scores.efficiency,
+                    floorScore: p.scores.adpValue,
+                    weatherScore: 50,
+                    reasoning: p.contextualInsights
+                })),
+                byCategory: Object.fromEntries(
+                    Object.entries(categoryRankings).map(([category, rankingsArray]) => [
+                        category,
+                        rankingsArray.map((p, index) => ({
+                            playerId: p.playerName,
+                            playerName: p.playerName,
+                            rank: index + 1,
+                            score: p.scores[category as keyof typeof p.scores],
+                            reasoning: p.contextualInsights
+                        }))
+                    ])
+                )
+            },
+            recommendation: {
+                startPlayer: winnerPlayer?.playerName || 'Analysis Unavailable',
+                confidence: comparison.confidence || 50,
+                reasoning: comparison.reasoning || ['Analysis unavailable'],
+                aiAnalysis: aiAnalysis || 'AI analysis unavailable',
+                winner: comparison.overallWinner || 'tie'
+            },
+            enhanced: true,
+            dataSourcesUsed: [
+                'Sleeper ADP Rankings',
+                'Market Share Analytics',
+                'Red Zone Efficiency',
+                'Expert Analysis',
+                'Coaching Changes',
+                'Rookie Scouting'
+            ]
         };
 
-        console.log(`✅ Comparison complete. Recommendation: Start ${recommendation.startPlayer} (${recommendation.confidence}% confidence)`);
+        console.log('🎉 Comparison response ready:', {
+            playersCount: response.players.length,
+            winner: response.recommendation.startPlayer,
+            confidence: response.recommendation.confidence
+        });
 
-        return NextResponse.json(result);
+        return NextResponse.json(response);
 
-    } catch (error: unknown) {
-        console.error('❌ Player comparison error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to compare players';
-        return NextResponse.json(
-            { error: errorMessage },
-            { status: 500 }
-        );
+    } catch (error) {
+        console.error('💥 Enhanced player comparison error:', error);
+        return NextResponse.json({
+            error: 'Failed to generate enhanced comparison',
+            details: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+        }, { status: 500 });
     }
 }
