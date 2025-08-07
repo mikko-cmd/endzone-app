@@ -78,3 +78,29 @@ body {
     transform: translateY(100vh);
   }
 }
+
+/* Global field animation */
+.field-background-active {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.field-background-active video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Trigger class for animation */
+body.field-animation-active .field-background-active {
+  display: block;
+}
+
+body:not(.field-animation-active) .field-background-active {
+  display: none;
+}

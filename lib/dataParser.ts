@@ -17,6 +17,7 @@ interface MarketShareData {
     name: string;
     team: string;
     gamesPlayed: number;
+    wrPointsPercent?: number;
     rbPointsPercent?: number;
     attPercent?: number;
     ydPercent?: number;
@@ -69,6 +70,53 @@ interface TargetShareData {
     competition: string[];
 }
 
+interface ScheduleData {
+    team: string;
+    week: number;
+    opponent: string;
+    isHome: boolean;
+    isBye: boolean;
+}
+
+interface WeekMatchup {
+    opponent: string;
+    isHome: boolean;
+    isBye: boolean;
+    opponentDefenseRank?: number;
+}
+
+// New: Defensive stats (2024) parsed from data/research/2024_defensive_stats.csv
+interface DefenseStats {
+    teamAbbr: string;
+    teamName: string;
+    games: number;
+    pointsAllowed: number; // PA
+    totalYardsAllowed: number; // Yds (total)
+    playsFaced: number; // Ply
+    yardsPerPlayAllowed: number; // Y/P
+    turnovers: number; // TO
+    forcedFumbles: number; // FL
+    firstDownsAllowedTotal: number; // 1stD (total)
+    passCompletionsAllowed: number; // Cmp
+    passAttemptsAllowed: number; // Att (passing)
+    passYardsAllowed: number; // Yds (passing)
+    passTDsAllowed: number; // TD (passing)
+    interceptions: number; // Int
+    netYardsPerAttemptAllowed: number; // NY/A
+    passFirstDownsAllowed: number; // 1stD (passing)
+    rushAttemptsFaced: number; // Att (rushing)
+    rushYardsAllowed: number; // Yds (rushing)
+    rushTDsAllowed: number; // TD (rushing)
+    yardsPerRushAllowed: number; // Y/A
+    rushFirstDownsAllowed: number; // 1stD (rushing)
+    penalties: number; // Pen
+    penaltyYards: number; // Yds (penalties)
+    firstDownByPenalty: number; // 1stPy
+    scorePct: number; // Sc%
+    turnoverPct: number; // TO%
+    exp: number; // EXP (EPA-like)
+}
+
 export class DataParser {
     private static instance: DataParser;
     private adpData: ADPData[] = [];
@@ -82,6 +130,8 @@ export class DataParser {
     private rookieAnalyses: RookieAnalysis[] = [];
     private targetShares: TargetShareData[] = [];
     private expertAnalysisCache: Map<string, string> = new Map();
+    private scheduleData: ScheduleData[] = []; // Add this line
+    private defenseStatsByAbbr: Record<string, DefenseStats> = {};
 
     static getInstance(): DataParser {
         if (!DataParser.instance) {
@@ -354,10 +404,11 @@ export class DataParser {
                             name: columns[0],
                             team: columns[1],
                             gamesPlayed: parseInt(columns[2]) || 0,
-                            tgtPercent: parseFloat(columns[3]?.replace('%', '')) || 0,
-                            recPercent: parseFloat(columns[4]?.replace('%', '')) || 0,
-                            ydPercent: parseFloat(columns[5]?.replace('%', '')) || 0,
-                            tdPercent: parseFloat(columns[6]?.replace('%', '')) || 0,
+                            wrPointsPercent: parseFloat(columns[3]?.replace('%', '')) || 0, // WR PTS%
+                            tgtPercent: parseFloat(columns[4]?.replace('%', '')) || 0,      // TGT%
+                            recPercent: parseFloat(columns[5]?.replace('%', '')) || 0,      // REC%
+                            ydPercent: parseFloat(columns[6]?.replace('%', '')) || 0,       // YD%
+                            tdPercent: parseFloat(columns[7]?.replace('%', '')) || 0,       // TD%
                         });
                     }
                 }
@@ -392,34 +443,180 @@ export class DataParser {
     }
 
     /**
-     * Initialize all data (call this on startup)
+     * Parse the 2025 NFL Schedule CSV file
      */
-    async initializeData(): Promise<void> {
-        console.log('🔄 Initializing enhanced data parser...');
+    async parseNFLSchedule(): Promise<ScheduleData[]> {
+        if (this.scheduleData.length > 0) {
+            return this.scheduleData; // Return cached data
+        }
 
         try {
-            // Existing data
-            await this.parseSleeperADP();
-            await this.parseRBMarketShare();
+            const filePath = path.join(process.cwd(), 'data/research/2025_nfl_schedule.csv');
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            const lines = fileContent.split('\n').filter(line => line.trim());
 
-            // NEW enhanced data
-            await this.parseRedZoneData();
-            await this.parseCoachingChanges();
-            await this.parseRookieAnalysis();
-            await this.parseAllMarketShareData();
-            await this.loadExpertAnalysis();
+            // Skip header row
+            const dataLines = lines.slice(1);
 
-            console.log(`✅ Parsed ${this.adpData.length} players from Sleeper ADP`);
-            console.log(`✅ Parsed ${this.marketShareRB.length} RBs from market share data`);
-            console.log(`✅ Parsed ${this.marketShareWR.length} WRs from market share data`);
-            console.log(`✅ Parsed ${this.marketShareTE.length} TEs from market share data`);
-            console.log(`✅ Parsed ${this.redZoneRB.length + this.redZoneWR.length + this.redZoneQB.length} players from red zone data`);
-            console.log(`✅ Parsed ${this.coachingChanges.length} coaching changes`);
-            console.log(`✅ Parsed ${this.rookieAnalyses.length} rookie analyses`);
-            console.log('✅ Enhanced data parser initialized successfully');
+            this.scheduleData = [];
+
+            dataLines.forEach(line => {
+                const columns = line.split(',');
+                if (columns.length < 19) return; // Need team + 18 weeks
+
+                const team = columns[0].trim();
+                if (!team) return;
+
+                // Parse each week (columns 1-18)
+                for (let week = 1; week <= 18; week++) {
+                    const matchupStr = columns[week]?.trim();
+                    if (!matchupStr) continue;
+
+                    if (matchupStr === 'BYE') {
+                        this.scheduleData.push({
+                            team,
+                            week,
+                            opponent: '',
+                            isHome: false,
+                            isBye: true
+                        });
+                    } else {
+                        const isHome = !matchupStr.startsWith('@');
+                        const opponent = isHome ? matchupStr : matchupStr.substring(1);
+
+                        this.scheduleData.push({
+                            team,
+                            week,
+                            opponent: opponent.trim(),
+                            isHome,
+                            isBye: false
+                        });
+                    }
+                }
+            });
+
+            console.log(`✅ Parsed ${this.scheduleData.length} schedule entries`);
+            return this.scheduleData;
 
         } catch (error) {
-            console.error('❌ Error initializing enhanced data parser:', error);
+            console.error('❌ Error parsing NFL schedule:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get matchup data for a specific team and week
+     */
+    getWeekMatchup(team: string, week: number, position: string = 'QB'): WeekMatchup {
+        // Ensure schedule data is loaded
+        if (this.scheduleData.length === 0) {
+            // Try to load synchronously if not already loaded
+            try {
+                const filePath = path.join(process.cwd(), 'data/research/2025_nfl_schedule.csv');
+                const fileContent = fs.readFileSync(filePath, 'utf-8');
+                const lines = fileContent.split('\n').filter(line => line.trim());
+                const dataLines = lines.slice(1);
+
+                dataLines.forEach(line => {
+                    const columns = line.split(',');
+                    if (columns.length < 19) return;
+
+                    const scheduleTeam = columns[0].trim();
+                    if (scheduleTeam !== team) return;
+
+                    const matchupStr = columns[week]?.trim();
+                    if (!matchupStr) return;
+
+                    if (matchupStr === 'BYE') {
+                        this.scheduleData.push({
+                            team: scheduleTeam,
+                            week,
+                            opponent: '',
+                            isHome: false,
+                            isBye: true
+                        });
+                    } else {
+                        const isHome = !matchupStr.startsWith('@');
+                        const opponent = isHome ? matchupStr : matchupStr.substring(1);
+
+                        this.scheduleData.push({
+                            team: scheduleTeam,
+                            week,
+                            opponent: opponent.trim(),
+                            isHome,
+                            isBye: false
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error loading schedule data:', error);
+            }
+        }
+
+        // Find the matchup for this team and week
+        const matchup = this.scheduleData.find(s => s.team === team && s.week === week);
+
+        if (!matchup) {
+            return {
+                opponent: 'TBD',
+                isHome: true,
+                isBye: false,
+                opponentDefenseRank: 16
+            };
+        }
+
+        if (matchup.isBye) {
+            return {
+                opponent: '',
+                isHome: false,
+                isBye: true,
+                opponentDefenseRank: undefined
+            };
+        }
+
+        // Get defensive ranking for this opponent and position
+        const opponentDefenseRank = this.getDefensiveRanking(matchup.opponent, position);
+
+        return {
+            opponent: matchup.opponent,
+            isHome: matchup.isHome,
+            isBye: false,
+            opponentDefenseRank
+        };
+    }
+
+    /**
+     * Get defensive ranking for a team vs a specific position (from 2024 data)
+     */
+    private getDefensiveRanking(team: string, position: string): number {
+        // 2024 Final Defensive Rankings (from our defense-rankings API)
+        const defenseRankings = {
+            QB: { 'LAC': 1, 'PHI': 2, 'DEN': 3, 'KC': 4, 'MIN': 5, 'GB': 6, 'DET': 7, 'PIT': 8, 'BAL': 9, 'MIA': 10, 'BUF': 11, 'SEA': 12, 'CHI': 13, 'HOU': 14, 'ARI': 15, 'TB': 16, 'LAR': 17, 'WAS': 18, 'NO': 19, 'NYJ': 20, 'NYG': 21, 'NE': 22, 'ATL': 23, 'IND': 24, 'CIN': 25, 'LV': 26, 'CLE': 27, 'JAX': 28, 'SF': 29, 'TEN': 30, 'DAL': 31, 'CAR': 32 },
+            RB: { 'PHI': 1, 'LAC': 2, 'DEN': 3, 'MIN': 4, 'KC': 5, 'GB': 6, 'PIT': 7, 'DET': 8, 'HOU': 9, 'MIA': 10, 'BAL': 11, 'CHI': 12, 'BUF': 13, 'SEA': 14, 'TB': 15, 'ARI': 16, 'LAR': 17, 'NYJ': 18, 'WAS': 19, 'NO': 20, 'NYG': 21, 'ATL': 22, 'NE': 23, 'IND': 24, 'CIN': 25, 'LV': 26, 'CLE': 27, 'SF': 28, 'TEN': 29, 'DAL': 30, 'JAX': 31, 'CAR': 32 },
+            WR: { 'LAC': 1, 'DEN': 2, 'PHI': 3, 'MIN': 4, 'KC': 5, 'PIT': 6, 'GB': 7, 'HOU': 8, 'DET': 9, 'BAL': 10, 'MIA': 11, 'CHI': 12, 'BUF': 13, 'SEA': 14, 'ARI': 15, 'TB': 16, 'NYJ': 17, 'LAR': 18, 'WAS': 19, 'NO': 20, 'NYG': 21, 'ATL': 22, 'NE': 23, 'IND': 24, 'CIN': 25, 'LV': 26, 'CLE': 27, 'SF': 28, 'TEN': 29, 'JAX': 30, 'DAL': 31, 'CAR': 32 },
+            TE: { 'LAC': 1, 'PHI': 2, 'DEN': 3, 'KC': 4, 'MIN': 5, 'PIT': 6, 'GB': 7, 'DET': 8, 'HOU': 9, 'BAL': 10, 'MIA': 11, 'CHI': 12, 'BUF': 13, 'SEA': 14, 'ARI': 15, 'NYJ': 16, 'TB': 17, 'LAR': 18, 'WAS': 19, 'NO': 20, 'NYG': 21, 'ATL': 22, 'NE': 23, 'IND': 24, 'CIN': 25, 'LV': 26, 'CLE': 27, 'SF': 28, 'TEN': 29, 'JAX': 30, 'DAL': 31, 'CAR': 32 }
+        };
+
+        const positionRankings = defenseRankings[position as keyof typeof defenseRankings];
+        return positionRankings?.[team as keyof typeof positionRankings] || 16; // Default to middle ranking
+    }
+
+    /**
+     * Initialize all data including schedule
+     */
+    async initializeData(): Promise<void> {
+        try {
+            await Promise.all([
+                this.parseSleeperADP(),
+                this.parseRBMarketShare(),
+                this.parseAllMarketShareData(), // This handles WR and TE market share
+                this.parseRedZoneData(), // This handles RB, WR, QB red zone data
+                this.parseNFLSchedule(),
+                this.parseDefenseStats()
+            ]);
+            console.log('✅ All enhanced data sources loaded successfully');
+        } catch (error) {
+            console.error('❌ Error initializing enhanced data:', error);
             throw error;
         }
     }
@@ -480,7 +677,8 @@ export class DataParser {
             redZoneWR: this.redZoneWR,
             redZoneQB: this.redZoneQB,
             coachingChanges: this.coachingChanges,
-            rookieAnalyses: this.rookieAnalyses
+            rookieAnalyses: this.rookieAnalyses,
+            defenseStatsByAbbr: this.defenseStatsByAbbr
         };
     }
 
@@ -492,6 +690,151 @@ export class DataParser {
     private parseCSVLine(line: string): string[] {
         const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
         return matches ? matches.map(m => m.replace(/"/g, '').trim()) : [];
+    }
+
+    // Team full name to abbreviation mapping (align with schedule abbreviations)
+    private teamNameToAbbr(name: string): string | undefined {
+        const map: Record<string, string> = {
+            'Arizona Cardinals': 'ARI',
+            'Atlanta Falcons': 'ATL',
+            'Baltimore Ravens': 'BAL',
+            'Buffalo Bills': 'BUF',
+            'Carolina Panthers': 'CAR',
+            'Chicago Bears': 'CHI',
+            'Cincinnati Bengals': 'CIN',
+            'Cleveland Browns': 'CLE',
+            'Dallas Cowboys': 'DAL',
+            'Denver Broncos': 'DEN',
+            'Detroit Lions': 'DET',
+            'Green Bay Packers': 'GB',
+            'Houston Texans': 'HOU',
+            'Indianapolis Colts': 'IND',
+            'Jacksonville Jaguars': 'JAX',
+            'Kansas City Chiefs': 'KC',
+            'Las Vegas Raiders': 'LV',
+            'Los Angeles Chargers': 'LAC',
+            'Los Angeles Rams': 'LAR',
+            'Miami Dolphins': 'MIA',
+            'Minnesota Vikings': 'MIN',
+            'New England Patriots': 'NE',
+            'New Orleans Saints': 'NO',
+            'New York Giants': 'NYG',
+            'New York Jets': 'NYJ',
+            'Philadelphia Eagles': 'PHI',
+            'Pittsburgh Steelers': 'PIT',
+            'San Francisco 49ers': 'SF',
+            'Seattle Seahawks': 'SEA',
+            'Tampa Bay Buccaneers': 'TB',
+            'Tennessee Titans': 'TEN',
+            'Washington Commanders': 'WAS'
+        };
+        return map[name];
+    }
+
+    /**
+     * Parse 2024 defensive stats from CSV
+     */
+    async parseDefenseStats(): Promise<void> {
+        if (Object.keys(this.defenseStatsByAbbr).length > 0) return;
+        try {
+            const filePath = path.join(process.cwd(), 'data/research/2024_defensive_stats.csv');
+            if (!fs.existsSync(filePath)) return;
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            const rawLines = fileContent.split('\n');
+            // The file starts with a grouping header row, find the real header containing 'Tm'
+            const headerLineIndex = rawLines.findIndex(l => /(^|,)Tm(,|$)/.test(l));
+            if (headerLineIndex === -1) return;
+            const header = rawLines[headerLineIndex].split(',');
+            const lines = rawLines.slice(headerLineIndex + 1);
+
+            const idx = (key: string, start = 0) => header.indexOf(key, start);
+            const idxNext = (key: string, after: number) => header.slice(after + 1).indexOf(key) + after + 1;
+
+            const idxTeam = idx('Tm');
+            const idxG = idx('G');
+            const idxPA = idx('PA');
+            const idxTotYds = idx('Yds');
+            const idxPly = idx('Ply');
+            const idxYPP = idx('Y/P');
+            const idxTO = idx('TO');
+            const idxFL = idx('FL');
+            const idx1stDTotal = idx('1stD');
+
+            const idxCmp = idx('Cmp');
+            const idxPassAtt = idx('Att');
+            const idxPassYds = idxCmp + 2;
+            const idxPassTD = idxCmp + 3;
+            const idxInt = idx('Int');
+            const idxNYA = idx('NY/A');
+            const idxPass1stD = idxNYA + 1;
+
+            const idxRushAtt = idxNext('Att', idxPass1stD);
+            const idxRushYds = idxRushAtt + 1;
+            const idxRushTD = idxRushAtt + 2;
+            const idxYARush = idx('Y/A', idxRushTD);
+            const idxRush1stD = idxYARush + 1;
+
+            const idxPen = idx('Pen');
+            const idxPenYds = idxNext('Yds', idxPen);
+            const idx1stPy = idx('1stPy');
+            const idxScPct = idx('Sc%');
+            const idxToPct = idx('TO%');
+            const idxExp = idx('EXP');
+
+            for (const raw of lines) {
+                if (!raw || raw.startsWith(',') || /Avg|League Total/i.test(raw)) continue;
+                const cols = raw.split(',');
+                const teamName = cols[idxTeam]?.trim();
+                if (!teamName) continue;
+                const abbr = this.teamNameToAbbr(teamName);
+                if (!abbr) continue;
+                const toNum = (v: string) => {
+                    const n = parseFloat((v || '').replace('%', ''));
+                    return isNaN(n) ? 0 : n;
+                };
+
+                this.defenseStatsByAbbr[abbr] = {
+                    teamAbbr: abbr,
+                    teamName,
+                    games: parseInt(cols[idxG] || '0') || 0,
+                    pointsAllowed: toNum(cols[idxPA]),
+                    totalYardsAllowed: toNum(cols[idxTotYds]),
+                    playsFaced: toNum(cols[idxPly]),
+                    yardsPerPlayAllowed: toNum(cols[idxYPP]),
+                    turnovers: toNum(cols[idxTO]),
+                    forcedFumbles: toNum(cols[idxFL]),
+                    firstDownsAllowedTotal: toNum(cols[idx1stDTotal]),
+                    passCompletionsAllowed: toNum(cols[idxCmp]),
+                    passAttemptsAllowed: toNum(cols[idxPassAtt]),
+                    passYardsAllowed: toNum(cols[idxPassYds]),
+                    passTDsAllowed: toNum(cols[idxPassTD]),
+                    interceptions: toNum(cols[idxInt]),
+                    netYardsPerAttemptAllowed: toNum(cols[idxNYA]),
+                    passFirstDownsAllowed: toNum(cols[idxPass1stD]),
+                    rushAttemptsFaced: toNum(cols[idxRushAtt]),
+                    rushYardsAllowed: toNum(cols[idxRushYds]),
+                    rushTDsAllowed: toNum(cols[idxRushTD]),
+                    yardsPerRushAllowed: toNum(cols[idxYARush]),
+                    rushFirstDownsAllowed: toNum(cols[idxRush1stD]),
+                    penalties: toNum(cols[idxPen]),
+                    penaltyYards: toNum(cols[idxPenYds]),
+                    firstDownByPenalty: toNum(cols[idx1stPy]),
+                    scorePct: toNum(cols[idxScPct]),
+                    turnoverPct: toNum(cols[idxToPct]),
+                    exp: toNum(cols[idxExp])
+                };
+            }
+
+            console.log(`✅ Parsed defensive stats for ${Object.keys(this.defenseStatsByAbbr).length} teams`);
+        } catch (error) {
+            console.error('❌ Error parsing defensive stats:', error);
+        }
+    }
+
+    getDefenseStats(teamAbbr: string): DefenseStats | undefined {
+        if (!teamAbbr) return undefined;
+        const key = teamAbbr.toUpperCase();
+        return this.defenseStatsByAbbr[key];
     }
 
     /**
@@ -557,7 +900,9 @@ export class DataParser {
         if (analysis) return analysis.trim();
 
         // Fuzzy search
-        for (const [name, content] of this.expertAnalysisCache.entries()) {
+        const entries = Array.from(this.expertAnalysisCache.entries());
+        for (let i = 0; i < entries.length; i++) {
+            const [name, content] = entries[i];
             if (name.toLowerCase().includes(playerName.toLowerCase()) ||
                 playerName.toLowerCase().includes(name.toLowerCase())) {
                 return content.trim();
@@ -576,5 +921,5 @@ export class DataParser {
 }
 
 // Export types and singleton
-export type { ADPData, MarketShareData, RedZoneData, CoachingChange, RookieAnalysis, TargetShareData };
+export type { ADPData, MarketShareData, RedZoneData, CoachingChange, RookieAnalysis, TargetShareData, ScheduleData, WeekMatchup };
 export const dataParser = DataParser.getInstance();

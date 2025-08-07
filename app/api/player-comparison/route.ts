@@ -1,4 +1,4 @@
-// COMPLETE FIXED VERSION - Replace your entire file with this:
+// COMPLETE ENHANCED VERSION WITH SCHEDULE INTEGRATION
 
 import { NextResponse } from 'next/server';
 import { dataParser } from '@/lib/dataParser';
@@ -27,11 +27,16 @@ interface EnhancedPlayerAnalysis {
     rookieAnalysis?: any;
     expertAnalysis?: string;
     contextualInsights: string[];
+    weeklyOpponent?: {
+        opponent: string;
+        isHome: boolean;
+        defenseRank: number;
+        isBye: boolean;
+    };
     scores: {
-        adpValue: number;
-        usage: number;
         efficiency: number;
-        situation: number;
+        recentPerformance: number;
+        defensiveMatchup: number;
         overall: number;
     };
 }
@@ -40,17 +45,11 @@ interface EnhancedComparisonDetails {
     player1: string;
     player2: string;
     player3?: string;
-    advantages: {
-        player1: string[];
-        player2: string[];
-        player3?: string[];
-    };
+    advantages: string[];
     categories: {
-        adpValue: 'player1' | 'player2' | 'player3' | 'tie';
-        usage: 'player1' | 'player2' | 'player3' | 'tie';
         efficiency: 'player1' | 'player2' | 'player3' | 'tie';
-        situation: 'player1' | 'player2' | 'player3' | 'tie';
-        redZone: 'player1' | 'player2' | 'player3' | 'tie';
+        recentPerformance: 'player1' | 'player2' | 'player3' | 'tie';
+        defensiveMatchup: 'player1' | 'player2' | 'player3' | 'tie';
     };
     overallWinner: 'player1' | 'player2' | 'player3' | 'tie';
     confidence: number;
@@ -65,20 +64,21 @@ class EnhancedPlayerComparison {
 
     static async getPlayerFromDatabase(sleeperId: string): Promise<{ name: string, position: string, team: string } | null> {
         try {
-            const { data: player } = await supabase
+            const { data, error } = await supabase
                 .from('players')
                 .select('name, position, team')
                 .eq('sleeper_id', sleeperId)
                 .single();
 
-            return player;
+            if (error || !data) return null;
+            return data;
         } catch (error) {
-            console.error(`Failed to fetch player ${sleeperId}:`, error);
+            console.error('Database lookup error:', error);
             return null;
         }
     }
 
-    static generateEnhancedPlayerAnalysis(playerName: string, position: string, team: string): EnhancedPlayerAnalysis {
+    static generateEnhancedPlayerAnalysis(playerName: string, position: string, team: string, week: number = 1): EnhancedPlayerAnalysis {
         const adpData = dataParser.getPlayerADP(playerName);
         const marketShare = dataParser.getMarketShareByPosition(playerName, position);
         const redZoneData = dataParser.getRedZoneData(playerName, position);
@@ -86,42 +86,91 @@ class EnhancedPlayerComparison {
         const rookieAnalysis = dataParser.getRookieAnalysis(playerName);
         const expertAnalysis = dataParser.getExpertAnalysis(playerName);
 
+        // Get current week opponent data using our new schedule system
+        const matchup = dataParser.getWeekMatchup(team, week, position);
+        const weeklyOpponent = {
+            opponent: matchup.opponent,
+            isHome: matchup.isHome,
+            defenseRank: matchup.opponentDefenseRank || 16,
+            isBye: matchup.isBye
+        };
+
         const contextualInsights: string[] = [];
 
+        // Updated category scoring system (removing redundant red zone efficiency)
         const scores = {
-            adpValue: this.calculateADPValueScore(adpData, position),
-            usage: this.calculateUsageScore(marketShare, position),
             efficiency: this.calculateEfficiencyScore(redZoneData, marketShare, position),
-            situation: this.calculateSituationScore(coachingChange, rookieAnalysis),
+            recentPerformance: this.calculateRecentPerformanceScore(marketShare, position, redZoneData),
+            defensiveMatchup: this.calculateDefensiveMatchupScore(weeklyOpponent.defenseRank, position, weeklyOpponent.isBye),
             overall: 0
         };
 
-        // Calculate overall score (weighted for weekly performance, not draft value)
-        scores.overall = Math.round(
-            (scores.adpValue * 0.10) +     // Reduced from 0.25 - ADP less important for weekly
-            (scores.usage * 0.40) +        // Increased from 0.30 - Usage most important for weekly
-            (scores.efficiency * 0.30) +   // Increased from 0.25 - Efficiency crucial for weekly
-            (scores.situation * 0.20)      // Same - Team context still matters
-        );
-
-        // Generate insights
-        if (scores.adpValue >= 80) contextualInsights.push('excellent draft value');
-        else if (scores.adpValue >= 60) contextualInsights.push('solid draft value');
-        else if (scores.adpValue <= 40) contextualInsights.push('expensive for expected return');
-
-        if (scores.usage >= 80) contextualInsights.push('elite usage rate');
-        else if (scores.usage >= 60) contextualInsights.push('good usage rate');
-        else if (scores.usage <= 40) contextualInsights.push('limited usage opportunities');
-
-        if (scores.efficiency >= 80) contextualInsights.push('elite efficiency metrics');
-        else if (scores.efficiency >= 60) contextualInsights.push('solid efficiency');
-
-        if (rookieAnalysis) {
-            contextualInsights.push(`rookie with ${rookieAnalysis.draftRound === 1 ? 'high' : 'moderate'} expectations`);
+        // Position-specific weighting for overall score with Week 1 emphasis on defensive matchup
+        if (position === 'QB') {
+            if (week === 1) {
+                // Week 1: Heavy emphasis on defensive matchup since we don't have current season data
+                scores.overall = Math.round(
+                    (scores.efficiency * 0.20) +        // Reduced from 35% to 20%
+                    (scores.recentPerformance * 0.25) +  // Reduced from 35% to 25%
+                    (scores.defensiveMatchup * 0.55)     // Increased from 30% to 55%
+                );
+            } else {
+                // Later weeks: More balanced approach as we get current season data
+                scores.overall = Math.round(
+                    (scores.efficiency * 0.35) +
+                    (scores.recentPerformance * 0.35) +
+                    (scores.defensiveMatchup * 0.30)
+                );
+            }
+        } else {
+            // For skill positions, similar Week 1 emphasis
+            if (week === 1) {
+                scores.overall = Math.round(
+                    (scores.efficiency * 0.20) +
+                    (scores.recentPerformance * 0.25) +
+                    (scores.defensiveMatchup * 0.55)
+                );
+            } else {
+                scores.overall = Math.round(
+                    (scores.efficiency * 0.30) +
+                    (scores.recentPerformance * 0.40) +
+                    (scores.defensiveMatchup * 0.30)
+                );
+            }
         }
 
-        if (coachingChange) {
-            contextualInsights.push(`coaching change impact (${coachingChange.newCoach})`);
+        // Efficiency insights: derive from market share for non-QBs, fallback to score for QBs
+        if (position !== 'QB' && marketShare) {
+            const yardageShare = marketShare.ydPercent ?? 0;
+            const touchdownShare = marketShare.tdPercent ?? 0;
+
+            if (yardageShare >= 25 && touchdownShare >= 25) {
+                contextualInsights.push('elite efficiency metrics');
+            } else if (yardageShare >= 18 || touchdownShare >= 20) {
+                contextualInsights.push('solid efficiency metrics');
+            } else if (yardageShare <= 12 && touchdownShare <= 12) {
+                contextualInsights.push('efficiency concerns');
+            }
+        } else {
+            if (scores.efficiency >= 80) contextualInsights.push('elite efficiency metrics');
+            else if (scores.efficiency >= 60) contextualInsights.push('solid efficiency metrics');
+            else if (scores.efficiency <= 40) contextualInsights.push('efficiency concerns');
+        }
+
+        // Add position-specific usage insights (skip default note for QBs)
+        if (position !== 'QB' && marketShare) {
+            const usageTgt = marketShare.tgtPercent ?? 0;
+            const usageAtt = marketShare.attPercent ?? 0;
+            const usage = usageTgt || usageAtt; // WR/TE: tgtPercent; RB: attPercent
+
+            if (usage >= 25) contextualInsights.push('significant usage rate');
+            else if (usage >= 18) contextualInsights.push('moderate usage rate');
+            else contextualInsights.push('limited usage opportunities');
+        }
+
+        // Add bye week context
+        if (weeklyOpponent.isBye) {
+            contextualInsights.push('on bye week');
         }
 
         return {
@@ -136,107 +185,156 @@ class EnhancedPlayerComparison {
             rookieAnalysis,
             expertAnalysis,
             contextualInsights,
+            weeklyOpponent,
             scores
         };
     }
 
-    static calculateADPValueScore(adpData: any, position: string): number {
-        if (!adpData) return 50;
-
-        const adp = adpData.ppr;
+    // New scoring methods for the updated categories
+    static calculateEfficiencyScore(redZoneData: any, marketShare: any, position: string): number {
+        let score = 50; // Base score
 
         if (position === 'QB') {
-            if (adp <= 36) return 85;
-            if (adp <= 72) return 70;
-            if (adp <= 120) return 80;
-            return 60;
-        } else if (position === 'RB') {
-            if (adp <= 24) return 75;
-            if (adp <= 48) return 80;
-            if (adp <= 84) return 70;
-            return 65;
-        } else if (['WR', 'TE'].includes(position)) {
-            if (adp <= 36) return 80;
-            if (adp <= 72) return 75;
-            if (adp <= 120) return 85;
-            return 60;
-        }
+            // QBs: efficiency based on actual red zone TD conversion rate
+            if (redZoneData) {
+                const touchdowns = redZoneData.rzTouchdowns || 0;
+                const attempts = redZoneData.rzAttempts || 1;
+                const tdRate = (touchdowns / attempts) * 100;
 
-        return 50;
-    }
-
-    static calculateUsageScore(marketShare: any, position: string): number {
-        if (!marketShare) return 40;
-
-        let primaryUsage = 0;
-
-        if (position === 'RB') {
-            primaryUsage = Math.max(marketShare.attPercent || 0, marketShare.tgtPercent || 0);
-        } else if (['WR', 'TE'].includes(position)) {
-            primaryUsage = marketShare.tgtPercent || 0;
-        }
-
-        if (primaryUsage >= 70) return 95;
-        if (primaryUsage >= 50) return 85;
-        if (primaryUsage >= 30) return 70;
-        if (primaryUsage >= 15) return 55;
-        return 35;
-    }
-
-    static calculateEfficiencyScore(redZoneData: any, marketShare: any, position: string): number {
-        if (!redZoneData && !marketShare) return 50;
-
-        let efficiencyScore = 50;
-
-        if (redZoneData) {
-            const rzEfficiency = redZoneData.rzTdPercent || 0;
-            if (rzEfficiency >= 80) efficiencyScore += 25;
-            else if (rzEfficiency >= 60) efficiencyScore += 15;
-            else if (rzEfficiency >= 40) efficiencyScore += 5;
-            else efficiencyScore -= 10;
-
-            if (redZoneData.glTdPercent >= 70) efficiencyScore += 10;
-        }
-
-        if (marketShare) {
-            const opportunities = (marketShare.attPercent || 0) + (marketShare.tgtPercent || 0);
-
-            if (opportunities > 0) {
-                const efficiencyRatio = (marketShare.rbPointsPercent || marketShare.recPercent || 0) / opportunities;
-                if (efficiencyRatio >= 1.2) efficiencyScore += 15;
-                else if (efficiencyRatio >= 1.0) efficiencyScore += 10;
-                else if (efficiencyRatio >= 0.8) efficiencyScore += 5;
-            }
-        }
-
-        return Math.min(Math.max(efficiencyScore, 0), 100);
-    }
-
-    static calculateSituationScore(coachingChange: any, rookieAnalysis: any): number {
-        let situationScore = 60;
-
-        if (coachingChange) {
-            if (coachingChange.fantasyImpact.toLowerCase().includes('offense') ||
-                coachingChange.fantasyImpact.toLowerCase().includes('production')) {
-                situationScore += 15;
-            } else {
-                situationScore += 5;
-            }
-        }
-
-        if (rookieAnalysis) {
-            if (rookieAnalysis.draftRound === 1) {
-                situationScore += 20;
-            } else if (rookieAnalysis.draftRound <= 3) {
-                situationScore += 10;
-            } else {
-                situationScore -= 5;
+                if (tdRate >= 60) score = 95; // Exceptional
+                else if (tdRate >= 50) score = 90; // Very good
+                else if (tdRate >= 40) score = 85; // Good
+                else if (tdRate >= 30) score = 80; // Above average
+                else if (tdRate >= 20) score = 75; // Average
+                else if (tdRate >= 15) score = 70; // Below average
+                else if (tdRate >= 10) score = 65; // Poor
+                else score = 60; // Very poor
             }
         } else {
-            situationScore += 10;
+            // Non-QB (WR/TE/RB): incorporate 2024 market share yd% and td% as primary efficiency signals
+            if (marketShare) {
+                const yardageShare: number = marketShare.ydPercent ?? 0;
+                const touchdownShare: number = marketShare.tdPercent ?? 0;
+
+                // Yardage share contribution
+                if (yardageShare >= 30) score += 25;
+                else if (yardageShare >= 25) score += 20;
+                else if (yardageShare >= 20) score += 15;
+                else if (yardageShare >= 15) score += 10;
+
+                // Touchdown share contribution
+                if (touchdownShare >= 30) score += 25;
+                else if (touchdownShare >= 25) score += 20;
+                else if (touchdownShare >= 20) score += 15;
+                else if (touchdownShare >= 15) score += 10;
+            }
+
+            // Red-zone conversion offers a smaller efficiency boost for non-QBs
+            if (redZoneData) {
+                const rzTdPercent: number = redZoneData.rzTdPercent || 0;
+                if (rzTdPercent >= 15) score += 10;
+                else if (rzTdPercent >= 10) score += 6;
+                else if (rzTdPercent >= 5) score += 3;
+            }
         }
 
-        return Math.min(Math.max(situationScore, 0), 100);
+        return Math.min(Math.max(score, 0), 100);
+    }
+
+    static calculateRecentPerformanceScore(marketShare: any, position: string, redZoneData?: any): number {
+        let score = 50; // Base score
+
+        if (position === 'QB') {
+            // For QBs, use red zone efficiency and touchdown production as performance indicators
+            if (redZoneData) {
+                const touchdowns = redZoneData.rzTouchdowns || 0;
+                const attempts = redZoneData.rzAttempts || 1;
+                const tdRate = (touchdowns / attempts) * 100;
+
+                // Base QB performance on touchdown production and efficiency
+                if (touchdowns >= 30 && tdRate >= 50) score = 95; // Elite
+                else if (touchdowns >= 25 && tdRate >= 45) score = 90; // Very good
+                else if (touchdowns >= 20 && tdRate >= 40) score = 85; // Good
+                else if (touchdowns >= 15 && tdRate >= 35) score = 80; // Above average
+                else if (touchdowns >= 10 && tdRate >= 30) score = 75; // Average
+                else if (touchdowns >= 5 && tdRate >= 25) score = 70; // Below average
+                else score = 65; // Poor
+            } else {
+                score = 75; // Default QB score if no red zone data
+            }
+        } else if (marketShare) {
+            const usage = marketShare.attPercent || marketShare.tgtPercent || 0;
+            if (usage >= 25) score = 90;
+            else if (usage >= 20) score = 80;
+            else if (usage >= 15) score = 70;
+            else if (usage >= 10) score = 60;
+            else score = 40;
+        }
+
+        return Math.min(Math.max(score, 0), 100);
+    }
+
+    static calculateDefensiveMatchupScore(defenseRank: number, position: string, isBye: boolean = false): number {
+        if (isBye) return 0; // No matchup on bye week
+
+        // Map defense rank to matchup score: Rank 1 (best defense) ~20, Rank 32 (worst defense) ~98
+        const matchupScore = Math.round(20 + ((defenseRank - 1) * 2.5));
+        return Math.min(Math.max(matchupScore, 20), 100);
+    }
+
+    static calculateRedZoneEfficiencyScore(redZoneData: any, position: string): number {
+        let score = 50; // Base score
+
+        if (redZoneData) {
+            const touchdowns = redZoneData.rzTouchdowns || 0;
+            const attempts = redZoneData.rzAttempts || 1;
+            const tdRate = (touchdowns / attempts) * 100;
+
+            // More granular scoring based on actual efficiency
+            if (tdRate >= 60) score = 95; // Exceptional efficiency
+            else if (tdRate >= 50) score = 90; // Very good efficiency  
+            else if (tdRate >= 40) score = 85; // Good efficiency
+            else if (tdRate >= 30) score = 80; // Above average
+            else if (tdRate >= 20) score = 75; // Average
+            else if (tdRate >= 15) score = 70; // Below average
+            else if (tdRate >= 10) score = 65; // Poor
+            else if (tdRate >= 5) score = 60; // Very poor
+            else score = 55; // Minimal efficiency
+        }
+
+        return Math.min(Math.max(score, 0), 100);
+    }
+
+    // Determine dynamic weights based on similarity of usage/efficiency between players (non-QB)
+    private static getDynamicWeights(players: EnhancedPlayerAnalysis[]): { eff: number; recent: number; def: number } {
+        const position = players[0]?.position || 'WR';
+        // QBs: keep more balanced, matchup relevant but not dominant
+        if (position === 'QB') {
+            return { eff: 0.35, recent: 0.35, def: 0.30 };
+        }
+
+        // For WR/RB/TE, compute gaps across tgt%, td%, yd%
+        const shares = players.map(p => ({
+            tgt: p.marketShare?.tgtPercent ?? null,
+            td: p.marketShare?.tdPercent ?? null,
+            yd: p.marketShare?.ydPercent ?? null,
+        }));
+
+        const gap = (key: 'tgt' | 'td' | 'yd') => {
+            const vals = shares.map(s => (s[key] ?? 0)).filter(v => typeof v === 'number');
+            if (vals.length === 0) return 0;
+            return Math.max(...vals) - Math.min(...vals);
+        };
+
+        const maxGap = Math.max(gap('tgt'), gap('td'), gap('yd'));
+
+        // Thresholds: large gaps -> downweight matchup heavily
+        if (maxGap >= 12) return { eff: 0.50, recent: 0.35, def: 0.15 };
+        if (maxGap >= 8) return { eff: 0.45, recent: 0.35, def: 0.20 };
+        if (maxGap >= 6) return { eff: 0.40, recent: 0.35, def: 0.25 };
+        if (maxGap >= 4) return { eff: 0.35, recent: 0.35, def: 0.30 };
+        // Very similar players -> matchup can matter more
+        return { eff: 0.30, recent: 0.30, def: 0.40 };
     }
 
     static comparePlayersEnhanced(players: EnhancedPlayerAnalysis[]): EnhancedComparisonDetails {
@@ -246,23 +344,56 @@ class EnhancedPlayerComparison {
 
         const [player1, player2, player3] = players;
 
+        // Recompute overall scores using dynamic weights based on similarity
+        const weights = this.getDynamicWeights(players);
+        players.forEach(p => {
+            p.scores.overall = Math.round(
+                (p.scores.efficiency * weights.eff) +
+                (p.scores.recentPerformance * weights.recent) +
+                (p.scores.defensiveMatchup * weights.def)
+            );
+        });
+
+        // Updated categories (removed redundant red zone efficiency)
         const categories = {
-            adpValue: this.determineWinner(players, 'adpValue'),
-            usage: this.determineWinner(players, 'usage'),
             efficiency: this.determineWinner(players, 'efficiency'),
-            situation: this.determineWinner(players, 'situation'),
-            redZone: this.determineRedZoneWinner(players)
+            recentPerformance: this.determineWinner(players, 'recentPerformance'),
+            defensiveMatchup: this.determineWinner(players, 'defensiveMatchup')
         };
 
         const overallWinner = this.determineWinner(players, 'overall');
 
+        // Enhanced confidence calculation
         const scores = players.map(p => p.scores.overall);
         const maxScore = Math.max(...scores);
-        const secondMax = scores.sort((a, b) => b - a)[1];
-        const confidence = Math.min(95, Math.max(55, maxScore - secondMax + 50));
+        const secondMax = scores.sort((a, b) => b - a)[1] || 0;
+        const scoreDifference = maxScore - secondMax;
+
+        // Count category advantages for the winner
+        const winnerIndex = overallWinner === 'player1' ? 0 : overallWinner === 'player2' ? 1 : 2;
+        const winnerPlayer = players[winnerIndex];
+
+        let categoryAdvantages = 0;
+        Object.values(categories).forEach(winner => {
+            if (winner === overallWinner) categoryAdvantages++;
+        });
+
+        // More dynamic confidence calculation
+        let confidence = 50; // Base confidence
+
+        // Score difference bonus (0-25 points)
+        confidence += Math.min(scoreDifference * 2, 25);
+
+        // Category dominance bonus adjusted for 3 categories (0-18 points)
+        if (categoryAdvantages === 3) confidence += 18; // Sweep all categories
+        else if (categoryAdvantages === 2) confidence += 12;
+        else if (categoryAdvantages === 1) confidence += 6;
+
+        // Cap confidence between 52% and 95%
+        confidence = Math.min(95, Math.max(52, Math.round(confidence)));
 
         const advantages = this.generateAdvantages(players);
-        const reasoning = this.generateReasoning(players, categories, overallWinner);
+        const reasoning = this.generateEnhancedReasoning(players, categories, overallWinner, categoryAdvantages);
 
         return {
             player1: player1.playerName,
@@ -279,274 +410,154 @@ class EnhancedPlayerComparison {
     static determineWinner(players: EnhancedPlayerAnalysis[], category: keyof EnhancedPlayerAnalysis['scores']): 'player1' | 'player2' | 'player3' | 'tie' {
         const scores = players.map(p => p.scores[category]);
         const maxScore = Math.max(...scores);
-        const winners = scores.map((score, index) => score === maxScore ? index : -1).filter(i => i !== -1);
+        const winnersCount = scores.filter(score => score === maxScore).length;
 
-        // If tied, use tiebreaker logic
-        if (winners.length > 1) {
-            console.log(`🤝 Tie detected in ${category}, using tiebreakers...`);
+        if (winnersCount > 1) return 'tie';
 
-            // Tiebreaker 1: Efficiency score
-            if (category !== 'efficiency') {
-                const efficiencyScores = winners.map(i => players[i].scores.efficiency);
-                const maxEff = Math.max(...efficiencyScores);
-                const effWinners = winners.filter(i => players[i].scores.efficiency === maxEff);
-                if (effWinners.length === 1) {
-                    const winnerIndex = effWinners[0];
-                    return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
-                }
-            }
-
-            // Tiebreaker 2: Usage score
-            if (category !== 'usage') {
-                const usageScores = winners.map(i => players[i].scores.usage);
-                const maxUsage = Math.max(...usageScores);
-                const usageWinners = winners.filter(i => players[i].scores.usage === maxUsage);
-                if (usageWinners.length === 1) {
-                    const winnerIndex = usageWinners[0];
-                    return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
-                }
-            }
-
-            // Tiebreaker 3: ADP Value (lower ADP = better)
-            if (category !== 'adpValue') {
-                const adpValues = winners.map(i => players[i].adpData?.ppr || 999);
-                const minADP = Math.min(...adpValues);
-                const adpWinners = winners.filter(i => (players[i].adpData?.ppr || 999) === minADP);
-                if (adpWinners.length === 1) {
-                    const winnerIndex = adpWinners[0];
-                    return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
-                }
-            }
-
-            // Final tiebreaker: Prefer player1 (first in comparison)
-            console.log(`🎲 Using final tiebreaker: player1`);
-            return 'player1';
-        }
-
-        const winnerIndex = winners[0];
+        const winnerIndex = scores.indexOf(maxScore);
         return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
     }
 
-    static determineRedZoneWinner(players: EnhancedPlayerAnalysis[]): 'player1' | 'player2' | 'player3' | 'tie' {
-        const redZoneScores = players.map(p => {
-            if (!p.redZoneData) return 0;
-            return p.redZoneData.rzTdPercent + (p.redZoneData.rzTouchdowns / 5);
-        });
-
-        const maxScore = Math.max(...redZoneScores);
-        if (maxScore === 0) return 'tie';
-
-        const winnerIndex = redZoneScores.indexOf(maxScore);
-        return winnerIndex === 0 ? 'player1' : winnerIndex === 1 ? 'player2' : 'player3';
-    }
-
-    static generateAdvantages(players: EnhancedPlayerAnalysis[]): any {
-        const advantages: any = {
-            player1: [],
-            player2: [],
-        };
-
-        if (players[2]) advantages.player3 = [];
+    static generateAdvantages(players: EnhancedPlayerAnalysis[]): string[] {
+        const advantages: string[] = [];
 
         players.forEach((player, index) => {
-            const playerKey = index === 0 ? 'player1' : index === 1 ? 'player2' : 'player3';
+            const playerLabel = `player${index + 1}` as 'player1' | 'player2' | 'player3';
 
-            if (player.scores.adpValue >= 80) {
-                advantages[playerKey].push(`Excellent draft value (ADP ${player.adpData?.ppr})`);
+            if (player.scores.efficiency >= 80) {
+                advantages.push(`${playerLabel}: Elite efficiency metrics`);
             }
 
-            if (player.scores.usage >= 80) {
-                const usage = player.marketShare?.attPercent || player.marketShare?.tgtPercent || 0;
-                advantages[playerKey].push(`Elite usage rate (${usage}% of team opportunities)`);
+            if (player.scores.defensiveMatchup >= 80) {
+                advantages.push(`${playerLabel}: Favorable matchup this week`);
             }
 
-            if (player.redZoneData && player.redZoneData.rzTdPercent >= 70) {
-                advantages[playerKey].push(`Elite red zone efficiency (${player.redZoneData.rzTdPercent}% TD rate)`);
+            if (player.redZoneData?.rzTouchdowns >= 8) {
+                advantages.push(`${playerLabel}: Strong red zone production`);
             }
-
-            player.contextualInsights.forEach(insight => {
-                if (insight.includes('elite') || insight.includes('excellent')) {
-                    advantages[playerKey].push(insight);
-                }
-            });
         });
 
         return advantages;
     }
 
-    static generateReasoning(players: EnhancedPlayerAnalysis[], categories: any, winner: string): string[] {
+    static generateEnhancedReasoning(players: EnhancedPlayerAnalysis[], categories: any, winner: string, categoryAdvantages: number): string[] {
         const winnerPlayer = winner === 'player1' ? players[0] : winner === 'player2' ? players[1] : players[2];
+        const reasoning: string[] = [];
 
-        if (!winnerPlayer) return ['Comparison analysis unavailable'];
-
-        const reasons: string[] = [];
-
-        // Check if it's a close matchup
-        const scores = players.map(p => p.scores.overall);
-        const maxScore = Math.max(...scores);
-        const secondMax = scores.sort((a, b) => b - a)[1];
-        const scoreDifference = maxScore - secondMax;
-
-        if (scoreDifference <= 10) {
-            reasons.push(`${winnerPlayer.playerName} has a slight edge in this close matchup (${winnerPlayer.scores.overall}/100)`);
-
-            // For close matchups, focus on weekly factors
-            const categoryWins = Object.values(categories).filter(cat => cat === winner).length;
-            const totalCategories = Object.keys(categories).length;
-
-            if (categoryWins >= 3) {
-                reasons.push(`Holds advantages in ${categoryWins} of ${totalCategories} key areas`);
-            } else {
-                reasons.push(`Very competitive matchup with marginal differences`);
-            }
+        if (categoryAdvantages >= 3) {
+            reasoning.push(`${winnerPlayer.playerName} has a clear edge in this matchup (${winnerPlayer.scores.overall}/100)`);
+            reasoning.push(`Holds advantages in ${categoryAdvantages} of 3 key areas`);
         } else {
-            reasons.push(`${winnerPlayer.playerName} emerges as the stronger start with ${winnerPlayer.scores.overall}/100`);
-
-            const categoryWins = Object.values(categories).filter(cat => cat === winner).length;
-            reasons.push(`Clear advantages in ${categoryWins} out of 5 key categories`);
+            reasoning.push(`${winnerPlayer.playerName} has a slight edge in this close matchup (${winnerPlayer.scores.overall}/100)`);
+            reasoning.push(`Competitive across all categories with ${categoryAdvantages} slight advantages`);
         }
 
-        // Focus on weekly performance factors (remove ADP completely)
-        if (winnerPlayer.scores.usage >= 70) {
-            const usage = winnerPlayer.marketShare?.attPercent || winnerPlayer.marketShare?.tgtPercent || 0;
-            if (usage > 0) {
-                if (usage >= 50) {
-                    reasons.push(`High-volume role with ${usage}% team usage for consistent touches`);
-                } else {
-                    reasons.push(`Solid ${usage}% team usage provides weekly floor`);
-                }
-            } else {
-                reasons.push(`Projected for increased weekly opportunity share`);
-            }
+        // Add current week opponent context
+        if (winnerPlayer.weeklyOpponent && !winnerPlayer.weeklyOpponent.isBye) {
+            const homeAway = winnerPlayer.weeklyOpponent.isHome ? 'vs' : '@';
+            reasoning.push(`Week 1: ${homeAway} ${winnerPlayer.weeklyOpponent.opponent} (Rank ${winnerPlayer.weeklyOpponent.defenseRank} defense vs ${winnerPlayer.position})`);
+        } else if (winnerPlayer.weeklyOpponent?.isBye) {
+            reasoning.push(`Week 1: On bye week - not available to start`);
         }
 
-        // Red zone opportunities (weekly scoring potential)
-        if (winnerPlayer.redZoneData && winnerPlayer.redZoneData.rzTdPercent >= 60) {
-            reasons.push(`Strong red zone role (${winnerPlayer.redZoneData.rzTdPercent}% conversion rate) boosts touchdown ceiling`);
-        } else if (winnerPlayer.redZoneData && winnerPlayer.redZoneData.rzTouchdowns >= 5) {
-            reasons.push(`Proven red zone producer with ${winnerPlayer.redZoneData.rzTouchdowns} TDs in 2024`);
+        // Add red zone context if available
+        if (winnerPlayer.redZoneData && winnerPlayer.redZoneData.rzTouchdowns > 0) {
+            reasoning.push(`Proven red zone producer with ${winnerPlayer.redZoneData.rzTouchdowns} TDs in 2024`);
         }
 
-        // Team situation factors (weekly game script impact)
-        if (winnerPlayer.coachingChange) {
-            reasons.push(`Potential scheme upgrade under new coaching staff`);
-        }
-
-        if (winnerPlayer.rookieAnalysis) {
-            reasons.push(`Emerging opportunity for increased weekly involvement`);
-        }
-
-        // Add relevant weekly performance insights
-        const weeklyInsights = winnerPlayer.contextualInsights.filter(insight =>
-            !insight.includes('draft') &&
-            !insight.includes('adp') &&
-            !insight.includes('round') &&
-            (insight.includes('usage') || insight.includes('efficiency') || insight.includes('opportunity'))
-        );
-
-        weeklyInsights.forEach(insight => {
-            if (insight.includes('elite') || insight.includes('high') || insight.includes('solid')) {
-                reasons.push(insight.charAt(0).toUpperCase() + insight.slice(1));
-            }
-        });
-
-        // Ensure we have at least 3 reasons
-        if (reasons.length < 3) {
-            if (winnerPlayer.position === 'RB') {
-                reasons.push(`Running back usage typically provides weekly consistency`);
-            } else if (winnerPlayer.position === 'WR') {
-                reasons.push(`Wide receiver target share offers weekly upside potential`);
-            } else if (winnerPlayer.position === 'TE') {
-                reasons.push(`Tight end role provides weekly floor in target-limited position`);
-            } else if (winnerPlayer.position === 'QB') {
-                reasons.push(`Quarterback position offers highest weekly fantasy ceiling`);
-            }
-        }
-
-        return reasons.slice(0, 5); // Limit to 5 key reasons
+        return reasoning;
     }
 
+    // Enhanced AI analysis with opponent context
     static async generateAIAnalysis(comparison: EnhancedComparisonDetails, players: EnhancedPlayerAnalysis[]): Promise<string> {
-        const winner = comparison.overallWinner;
-        const winnerPlayer = winner === 'player1' ? players[0] : winner === 'player2' ? players[1] : players[2];
+        const [player1, player2, player3] = players;
+        const winner = comparison.overallWinner === 'player1' ? player1 : comparison.overallWinner === 'player2' ? player2 : player3;
+        const loser = comparison.overallWinner === 'player1' ? player2 : player1;
 
-        if (!winnerPlayer) return 'AI analysis unavailable';
+        // Get matchup information
+        const winnerMatchup = winner.weeklyOpponent;
+        const loserMatchup = loser.weeklyOpponent;
 
-        const systemPrompt = `You are an expert fantasy football analyst providing Week 1 start/sit recommendations for the 2025 NFL season. 
+        // Get red zone data for accurate analysis
+        const winnerRedZone = winner.redZoneData;
+        const loserRedZone = loser.redZoneData;
 
-CRITICAL CONTEXT FOR WEEK 1 ANALYSIS:
-- This is Week 1 of the 2025 season - no 2025 game data exists yet
-- Base your analysis entirely on FULL 2024 season performance data
-- Do NOT focus on recent games or "hot streaks" from late 2024
-- Emphasize season-long usage patterns, consistency, and role security
-- Consider how 2024 full-season performance translates to Week 1 expectations
-- Account for any coaching changes or team situation shifts entering 2025
+        let analysis = `**RECOMMENDED START: ${winner.playerName} (${winner.position}, ${winner.team})** `;
 
-APPROACH:
-- Use specific 2024 season statistics and usage data
-- Focus on weekly fantasy production reliability over the full season
-- Avoid recent bias - treat all 2024 data equally, not just final games
-- Be decisive but acknowledge Week 1 uncertainty when both players are close`;
+        // Add matchup context
+        if (winnerMatchup && loserMatchup) {
+            const winnerOpponent = winnerMatchup.opponent;
+            const loserOpponent = loserMatchup.opponent;
+            const winnerDefenseRank = winnerMatchup.defenseRank;
+            const loserDefenseRank = loserMatchup.defenseRank;
 
-        let userPrompt = `WEEK 1 START/SIT ANALYSIS (Based on 2024 Full Season Data):\n\n`;
-
-        players.forEach((player, index) => {
-            const playerNum = index + 1;
-            userPrompt += `PLAYER ${playerNum}: ${player.playerName} (${player.position}, ${player.team})\n`;
-            userPrompt += `- Weekly Performance Score: ${player.scores.overall}/100\n`;
-
-            // Remove ADP from AI analysis since it's not relevant for start/sit
-            if (player.marketShare) {
-                const usage = player.marketShare.attPercent || player.marketShare.tgtPercent || 0;
-                userPrompt += `- 2024 Season Usage: ${usage}% of team opportunities (full season average)\n`;
-            }
-
-            if (player.redZoneData) {
-                userPrompt += `- 2024 Red Zone Production: ${player.redZoneData.rzTouchdowns} TDs on ${player.redZoneData.rzAttempts} attempts (${player.redZoneData.rzTdPercent}% rate)\n`;
-            }
-
-            // Add team context for 2025
-            if (player.coachingChange) {
-                userPrompt += `- 2025 Context: New coaching staff under ${player.coachingChange.newCoach}\n`;
-            }
-
-            if (player.rookieAnalysis) {
-                userPrompt += `- 2025 Context: Rookie entering second season with established role\n`;
-            }
-
-            userPrompt += `- Performance Profile: ${player.contextualInsights.join(', ')}\n\n`;
-        });
-
-        userPrompt += `RECOMMENDED START: ${winnerPlayer.playerName}\n`;
-        userPrompt += `ANALYSIS CONFIDENCE: ${comparison.confidence}%\n\n`;
-
-        userPrompt += `INSTRUCTIONS:
-Provide a decisive Week 1 start/sit recommendation explaining why ${winnerPlayer.playerName} is the better choice for Week 1. 
-
-Focus on:
-1. How their 2024 full-season performance translates to Week 1 expectations
-2. Weekly fantasy production reliability and floor/ceiling based on 2024 data
-3. Team role security and usage patterns from 2024
-4. Any 2025 situation changes that impact Week 1 specifically
-
-Keep under 130 words and be specific about why this choice makes sense for Week 1 specifically.`;
-
-        try {
-            const response = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                max_tokens: 200,
-                temperature: 0.7,
-            });
-
-            return response.choices[0]?.message?.content || 'AI analysis unavailable';
-        } catch (error) {
-            console.error('Error generating AI analysis:', error);
-            return 'AI analysis unavailable due to technical error';
+            analysis += `${winner.playerName} faces the ${winnerOpponent} defense (ranked ${winnerDefenseRank} against ${winner.position}s in 2024), `;
+            analysis += `while ${loser.playerName} faces the ${loserOpponent} defense (ranked ${loserDefenseRank}). `;
         }
+
+        // Add performance context with non-QB efficiency details
+        analysis += `${winner.playerName}'s Weekly Performance Score of ${winner.scores.overall} indicates ${winner.scores.overall >= 80 ? 'excellent' : winner.scores.overall >= 70 ? 'strong' : 'solid'} fantasy potential. `;
+        if (winner.position !== 'QB' && winner.marketShare && loser.marketShare) {
+            const wTeam = winner.team;
+            const lTeam = loser.team;
+            const wTgt = winner.marketShare.tgtPercent ?? 0;
+            const lTgt = loser.marketShare.tgtPercent ?? 0;
+            const wTd = winner.marketShare.tdPercent ?? 0;
+            const lTd = loser.marketShare.tdPercent ?? 0;
+            const wYd = winner.marketShare.ydPercent ?? 0;
+            const lYd = loser.marketShare.ydPercent ?? 0;
+
+            // Target share narrative (higher is better)
+            if (wTgt > lTgt) {
+                analysis += `${winner.playerName} accounts for ${wTgt.toFixed(1)}% of the ${wTeam} total targets (vs ${loser.playerName} ${lTgt.toFixed(1)}%), indicating a stronger opportunity share. `;
+            } else if (wTgt < lTgt) {
+                analysis += `${loser.playerName} holds a higher target share (${lTgt.toFixed(1)}% vs ${wTgt.toFixed(1)}%), which generally correlates with more weekly opportunities. `;
+            } else {
+                analysis += `Both players carry a similar target share (${wTgt.toFixed(1)}%). `;
+            }
+
+            // Touchdown share narrative (higher is better)
+            if (wTd > lTd) {
+                analysis += `${winner.playerName} also led in team receiving TD share (${wTd.toFixed(1)}% vs ${lTd.toFixed(1)}%), supporting touchdown upside. `;
+            } else if (wTd < lTd) {
+                analysis += `${loser.playerName} leads in receiving TD share (${lTd.toFixed(1)}% vs ${wTd.toFixed(1)}%), signaling stronger TD potential. `;
+            } else {
+                analysis += `Team receiving TD share is similar (${wTd.toFixed(1)}%). `;
+            }
+
+            // Yardage share mention
+            if (wYd !== lYd) {
+                const leader = wYd >= lYd ? winner.playerName : loser.playerName;
+                analysis += `Yardage share favors ${leader} (${wYd.toFixed(1)}% vs ${lYd.toFixed(1)}%). `;
+            } else {
+                analysis += `Yardage share is virtually identical (${wYd.toFixed(1)}%). `;
+            }
+        }
+
+        // Add red zone efficiency comparison
+        if (winnerRedZone && loserRedZone) {
+            const winnerTdRate = ((winnerRedZone.rzTouchdowns || 0) / (winnerRedZone.rzAttempts || 1)) * 100;
+            const loserTdRate = ((loserRedZone.rzTouchdowns || 0) / (loserRedZone.rzAttempts || 1)) * 100;
+
+            if (Math.abs(winnerTdRate - loserTdRate) < 0.1 && (winnerRedZone.rzAttempts || 0) === (loserRedZone.rzAttempts || 0) && (winnerRedZone.rzTouchdowns || 0) === (loserRedZone.rzTouchdowns || 0)) {
+                analysis += `And check this out: both have matching red-zone efficiency — ${winnerRedZone.rzTouchdowns} TDs on ${winnerRedZone.rzAttempts} attempts (${winnerTdRate.toFixed(1)}%). `;
+            } else {
+                analysis += `${winner.playerName} converted ${winnerRedZone.rzTouchdowns} touchdowns on ${winnerRedZone.rzAttempts} red zone attempts (${winnerTdRate.toFixed(1)}% efficiency), `;
+                analysis += `compared to ${loser.playerName}'s ${loserRedZone.rzTouchdowns} touchdowns on ${loserRedZone.rzAttempts} attempts (${loserTdRate.toFixed(1)}% efficiency). `;
+            }
+        }
+
+        // Add confidence explanation
+        const confidence = comparison.confidence;
+        if (confidence >= 80) {
+            analysis += `The ${confidence}% confidence reflects ${winner.playerName}'s clear advantages across multiple categories.`;
+        } else if (confidence >= 65) {
+            analysis += `The ${confidence}% confidence indicates a competitive matchup with ${winner.playerName} holding slight advantages.`;
+        } else {
+            analysis += `The ${confidence}% confidence reflects a very close matchup where either player could outperform.`;
+        }
+
+        return analysis;
     }
 }
 
@@ -557,8 +568,9 @@ export async function GET(request: Request) {
         const player1Id = searchParams.get('player1');
         const player2Id = searchParams.get('player2');
         const player3Id = searchParams.get('player3');
+        const week = parseInt(searchParams.get('week') || '1'); // Default to Week 1
 
-        console.log('🔍 Comparison request:', { player1Id, player2Id, player3Id });
+        console.log('🔍 Comparison request:', { player1Id, player2Id, player3Id, week });
 
         if (!player1Id || !player2Id) {
             return NextResponse.json({ error: 'player1 and player2 parameters are required' }, { status: 400 });
@@ -599,42 +611,24 @@ export async function GET(request: Request) {
 
         try {
             const player1Analysis = EnhancedPlayerComparison.generateEnhancedPlayerAnalysis(
-                player1Info.name,
-                player1Info.position,
-                player1Info.team
+                player1Info.name, player1Info.position, player1Info.team, week
             );
-            console.log('✅ Player 1 analysis:', {
-                name: player1Analysis.playerName,
-                scores: player1Analysis.scores,
-                insights: player1Analysis.contextualInsights
-            });
             players.push(player1Analysis);
 
             const player2Analysis = EnhancedPlayerComparison.generateEnhancedPlayerAnalysis(
-                player2Info.name,
-                player2Info.position,
-                player2Info.team
+                player2Info.name, player2Info.position, player2Info.team, week
             );
-            console.log('✅ Player 2 analysis:', {
-                name: player2Analysis.playerName,
-                scores: player2Analysis.scores,
-                insights: player2Analysis.contextualInsights
-            });
             players.push(player2Analysis);
 
             if (player3Info) {
                 const player3Analysis = EnhancedPlayerComparison.generateEnhancedPlayerAnalysis(
-                    player3Info.name,
-                    player3Info.position,
-                    player3Info.team
+                    player3Info.name, player3Info.position, player3Info.team, week
                 );
-                console.log('✅ Player 3 analysis:', {
-                    name: player3Analysis.playerName,
-                    scores: player3Analysis.scores,
-                    insights: player3Analysis.contextualInsights
-                });
                 players.push(player3Analysis);
             }
+
+            console.log(`✅ Generated analysis for ${players.length} players`);
+
         } catch (analysisError) {
             console.error('❌ Error generating player analysis:', analysisError);
             return NextResponse.json({
@@ -660,15 +654,11 @@ export async function GET(request: Request) {
         const winnerPlayer = comparison.overallWinner === 'player1' ? players[0] :
             comparison.overallWinner === 'player2' ? players[1] : players[2];
 
-        // Sort players by overall score for rankings
-        const sortedPlayers = [...players].sort((a, b) => b.scores.overall - a.scores.overall);
-
-        // Create category rankings
+        // Create category rankings (updated categories). We removed overall rankings.
         const categoryRankings = {
-            adpValue: [...players].sort((a, b) => b.scores.adpValue - a.scores.adpValue),
-            usage: [...players].sort((a, b) => b.scores.usage - a.scores.usage),
             efficiency: [...players].sort((a, b) => b.scores.efficiency - a.scores.efficiency),
-            situation: [...players].sort((a, b) => b.scores.situation - a.scores.situation),
+            recentPerformance: [...players].sort((a, b) => b.scores.recentPerformance - a.scores.recentPerformance),
+            defensiveMatchup: [...players].sort((a, b) => b.scores.defensiveMatchup - a.scores.defensiveMatchup),
         };
 
         const response = {
@@ -677,26 +667,13 @@ export async function GET(request: Request) {
                 position: p.position,
                 team: p.team,
                 scores: p.scores,
-                insights: p.contextualInsights,
-                adp: p.adpData?.ppr,
-                usage: p.marketShare ? (p.marketShare.attPercent || p.marketShare.tgtPercent) : null,
+                insights: p.contextualInsights.filter(insight => !insight.includes('draft value')), // Remove draft insights
+                weeklyOpponent: p.weeklyOpponent,
+                usage: p.position !== 'QB' ? (p.marketShare ? (p.marketShare.attPercent || p.marketShare.tgtPercent) : null) : null,
                 redZoneTDs: p.redZoneData?.rzTouchdowns || null
             })),
             headToHead: comparison,
             rankings: {
-                overall: sortedPlayers.map((p, index) => ({
-                    playerId: p.playerName,
-                    playerName: p.playerName,
-                    rank: index + 1,
-                    score: p.scores.overall,
-                    overallScore: p.scores.overall,
-                    matchupScore: p.scores.situation,
-                    formScore: p.scores.usage,
-                    ceilingScore: p.scores.efficiency,
-                    floorScore: p.scores.adpValue,
-                    weatherScore: 50,
-                    reasoning: p.contextualInsights
-                })),
                 byCategory: Object.fromEntries(
                     Object.entries(categoryRankings).map(([category, rankingsArray]) => [
                         category,
@@ -710,6 +687,23 @@ export async function GET(request: Request) {
                     ])
                 )
             },
+            defensiveMatchupDetails: players.map(p => ({
+                player: p.playerName,
+                team: p.team,
+                opponent: p.weeklyOpponent?.opponent,
+                defenseRank: p.weeklyOpponent?.defenseRank,
+                home: p.weeklyOpponent?.isHome,
+                matchupScore: p.scores.defensiveMatchup,
+                // attach parsed defense stats if available
+                defenseStats: ((): any => {
+                    try {
+                        const stats = dataParser.getDefenseStats(p.weeklyOpponent?.opponent || '');
+                        if (!stats) return undefined;
+                        const { teamAbbr, teamName, games, pointsAllowed, totalYardsAllowed, yardsPerPlayAllowed, passCompletionsAllowed, passYardsAllowed, passTDsAllowed, netYardsPerAttemptAllowed, rushYardsAllowed, rushTDsAllowed, yardsPerRushAllowed, scorePct, turnoverPct, exp } = stats as any;
+                        return { teamAbbr, teamName, games, pointsAllowed, totalYardsAllowed, yardsPerPlayAllowed, passCompletionsAllowed, passYardsAllowed, passTDsAllowed, netYardsPerAttemptAllowed, rushYardsAllowed, rushTDsAllowed, yardsPerRushAllowed, scorePct, turnoverPct, exp };
+                    } catch { return undefined; }
+                })()
+            })),
             recommendation: {
                 startPlayer: winnerPlayer?.playerName || 'Analysis Unavailable',
                 confidence: comparison.confidence || 50,
@@ -718,20 +712,22 @@ export async function GET(request: Request) {
                 winner: comparison.overallWinner || 'tie'
             },
             enhanced: true,
+            week: week,
             dataSourcesUsed: [
-                'Sleeper ADP Rankings',
-                'Market Share Analytics',
-                'Red Zone Efficiency',
-                'Expert Analysis',
-                'Coaching Changes',
-                'Rookie Scouting'
+                'Sleeper Player Database',
+                '2024 Season Performance Data',
+                '2024 Defensive Rankings',
+                `2025 Week ${week} Schedule`,
+                'Red Zone Efficiency Analytics',
+                'Market Share Analytics'
             ]
         };
 
         console.log('🎉 Comparison response ready:', {
             playersCount: response.players.length,
             winner: response.recommendation.startPlayer,
-            confidence: response.recommendation.confidence
+            confidence: response.recommendation.confidence,
+            week: week
         });
 
         return NextResponse.json(response);
@@ -740,8 +736,7 @@ export async function GET(request: Request) {
         console.error('💥 Enhanced player comparison error:', error);
         return NextResponse.json({
             error: 'Failed to generate enhanced comparison',
-            details: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : undefined
+            details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
 }

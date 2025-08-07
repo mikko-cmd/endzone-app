@@ -27,18 +27,38 @@ interface PlayerRanking {
     reasoning: string[];
 }
 
+interface DefensiveStats {
+    teamAbbr: string;
+    teamName: string;
+    pointsAllowed: number;
+    totalYardsAllowed: number;
+    yardsPerPlayAllowed: number;
+    passYardsAllowed: number;
+    passTDsAllowed: number;
+    netYardsPerAttemptAllowed: number;
+    rushYardsAllowed: number;
+    rushTDsAllowed: number;
+    yardsPerRushAllowed: number;
+    scorePct: number;
+    turnoverPct: number;
+    exp: number;
+}
+
+interface DefensiveMatchupDetail {
+    player: string;
+    team: string;
+    opponent?: string;
+    defenseRank?: number;
+    home?: boolean;
+    matchupScore?: number;
+    defenseStats?: DefensiveStats;
+}
+
 interface ComparisonResult {
     players: any[];
     headToHead: any;
     rankings: {
-        overall: PlayerRanking[];
-        byCategory: {
-            matchup: PlayerRanking[];
-            form: PlayerRanking[];
-            weather: PlayerRanking[];
-            ceiling: PlayerRanking[];
-            floor: PlayerRanking[];
-        };
+        byCategory: Record<string, PlayerRanking[]>;
     };
     recommendation: {
         startPlayer: string;
@@ -46,6 +66,7 @@ interface ComparisonResult {
         reasoning: string[];
         aiAnalysis: string;
     };
+    defensiveMatchupDetails?: DefensiveMatchupDetail[];
 }
 
 export default function PlayerComparisonPage({ params }: { params: { leagueId: string } }) {
@@ -197,7 +218,12 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                 >
                     Player {field.id}
                 </label>
-                <div className="relative" ref={el => dropdownRefs.current[field.id] = el}>
+                <div
+                    className="relative"
+                    ref={(el: HTMLDivElement | null) => {
+                        dropdownRefs.current[field.id] = el;
+                    }}
+                >
                     <input
                         type="text"
                         id={`player${field.id}`}
@@ -230,10 +256,9 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
 
     const getCategoryIcon = (category: string) => {
         switch (category) {
-            case 'matchup': return <Shield size={16} className="text-white" />;
-            case 'form': return <TrendingUp size={16} className="text-white" />;
-            case 'ceiling': return <Zap size={16} className="text-white" />;
-            case 'floor': return <BarChart3 size={16} className="text-white" />;
+            case 'defensiveMatchup': return <Shield size={16} className="text-white" />;
+            case 'recentPerformance': return <TrendingUp size={16} className="text-white" />;
+            case 'efficiency': return <Zap size={16} className="text-white" />;
             default: return null;
         }
     };
@@ -241,7 +266,7 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
     const renderComparisonResults = () => {
         if (!comparisonResult) return null;
 
-        const { rankings, recommendation } = comparisonResult;
+        const { rankings, recommendation, defensiveMatchupDetails } = comparisonResult;
 
         return (
             <div className="mt-8 space-y-6">
@@ -295,39 +320,116 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                     </div>
                 </div>
 
-                {/* Overall Rankings */}
+                {/* Defensive Matchup */}
                 <div className="bg-black border border-white rounded-xl p-6">
                     <h3 className="text-xl font-bold mb-4 flex items-center text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                        <BarChart3 size={20} className="mr-2" />
-                        Overall Rankings
+                        <Shield size={20} className="mr-2" />
+                        Defensive Matchup
                     </h3>
-                    <div className="space-y-3">
-                        {rankings.overall.map((player, index) => (
-                            <div key={player.playerId} className={`flex items-center justify-between p-3 rounded-lg border ${index === 0 ? 'bg-gray-900 border-white' : 'bg-gray-800 border-gray-600'}`}>
-                                <div className="flex items-center">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 font-bold ${index === 0 ? 'bg-white text-black' : 'bg-gray-600 text-white'}`} style={{ fontFamily: 'Consolas, monospace' }}>
-                                        {player.rank}
-                                    </div>
-                                    <div>
-                                        <div className="font-semibold text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                                            {player.playerName}
-                                        </div>
-                                        <div className="text-sm text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
-                                            {player.reasoning.slice(0, 2).join(' • ')}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-lg font-bold text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                                        {player.score.toFixed(1)}
-                                    </div>
-                                    <div className="text-xs text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
-                                        Score
-                                    </div>
-                                </div>
+                    {(() => {
+                        const posLookup: Record<string, string> = Object.fromEntries(
+                            (comparisonResult.players || []).map(p => [p.name, p.position])
+                        );
+                        const positions = (defensiveMatchupDetails || []).map(d => posLookup[d.player] || 'WR');
+                        const unique = Array.from(new Set(positions));
+                        const isQB = unique.length === 1 && unique[0] === 'QB';
+                        const isRB = unique.length === 1 && unique[0] === 'RB';
+                        // Default WR/TE table otherwise
+
+                        const details = defensiveMatchupDetails || [];
+                        const headerCell = 'px-3 py-2 border border-gray-700 text-xs uppercase tracking-wide text-gray-400';
+                        const cell = 'px-3 py-2 border border-gray-700 text-sm text-white';
+
+                        const renderPassTable = () => (
+                            <div className="overflow-x-auto mb-4">
+                                <table className="w-full border-collapse text-left" style={{ fontFamily: 'Consolas, monospace' }}>
+                                    <thead>
+                                        <tr>
+                                            <th className={headerCell}>Player</th>
+                                            <th className={headerCell}>Opponent</th>
+                                            <th className={headerCell}>Completions (G)</th>
+                                            <th className={headerCell}>Opponent Pts Allowed (G)</th>
+                                            <th className={headerCell}>Opp Pass Yds (G)</th>
+                                            <th className={headerCell}>Pass TD (G)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {details.map((d) => {
+                                            const stats: any = d.defenseStats || {};
+                                            const rowKey = `${d.player}-${d.opponent}-pass`;
+                                            const cmp = stats.passCompletionsAllowed;
+                                            const pts = stats.pointsAllowed;
+                                            const pyd = stats.passYardsAllowed;
+                                            const ptd = stats.passTDsAllowed;
+                                            return (
+                                                <tr key={rowKey}>
+                                                    <td className={cell}>{d.player}</td>
+                                                    <td className={cell}>Rank {d.defenseRank ?? '—'} • {d.opponent} {d.home ? '(home)' : '(away)'}</td>
+                                                    <td className={cell}>{typeof cmp === 'number' ? cmp.toFixed(1) : '—'}</td>
+                                                    <td className={cell}>{typeof pts === 'number' ? pts.toFixed(1) : '—'}</td>
+                                                    <td className={cell}>{typeof pyd === 'number' ? pyd.toFixed(0) : '—'}</td>
+                                                    <td className={cell}>{typeof ptd === 'number' ? ptd.toFixed(2) : '—'}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
-                        ))}
-                    </div>
+                        );
+
+                        const renderRushTable = () => (
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse text-left" style={{ fontFamily: 'Consolas, monospace' }}>
+                                    <thead>
+                                        <tr>
+                                            <th className={headerCell}>Player</th>
+                                            <th className={headerCell}>Opponent</th>
+                                            <th className={headerCell}>Rush Att (G)</th>
+                                            <th className={headerCell}>Rush Yds (G)</th>
+                                            <th className={headerCell}>Rush TD (G)</th>
+                                            <th className={headerCell}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {details.map((d) => {
+                                            const stats: any = d.defenseStats || {};
+                                            const rowKey = `${d.player}-${d.opponent}-rush`;
+                                            const ratt = stats.rushAttemptsFaced;
+                                            const ryds = stats.rushYardsAllowed;
+                                            const rtd = stats.rushTDsAllowed;
+                                            return (
+                                                <tr key={rowKey}>
+                                                    <td className={cell}>{d.player}</td>
+                                                    <td className={cell}>Rank {d.defenseRank ?? '—'} • {d.opponent} {d.home ? '(home)' : '(away)'}</td>
+                                                    <td className={cell}>{typeof ratt === 'number' ? ratt.toFixed(1) : '—'}</td>
+                                                    <td className={cell}>{typeof ryds === 'number' ? ryds.toFixed(0) : '—'}</td>
+                                                    <td className={cell}>{typeof rtd === 'number' ? rtd.toFixed(2) : '—'}</td>
+                                                    <td className={cell}></td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        );
+
+                        if (isQB) {
+                            return (
+                                <div className="space-y-6">
+                                    <h4 className="font-semibold text-white" style={{ fontFamily: 'Consolas, monospace' }}>Defensive Matchup Passing Stats</h4>
+                                    {renderPassTable()}
+                                    <h4 className="font-semibold text-white" style={{ fontFamily: 'Consolas, monospace' }}>Defensive Matchup Rushing Stats</h4>
+                                    {renderRushTable()}
+                                </div>
+                            );
+                        }
+
+                        if (isRB) {
+                            return renderRushTable();
+                        }
+
+                        return renderPassTable();
+                    })()}
                 </div>
 
                 {/* Category Breakdown */}
