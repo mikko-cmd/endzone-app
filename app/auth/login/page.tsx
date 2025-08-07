@@ -8,175 +8,115 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import Link from "next/link";
+import FootballFieldBackground from '@/components/FootballFieldBackground';
 
-export default function Login() {
-  const router = useRouter();
-  const supabase = createClient();
-
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        router.push("/dashboard");
-      }
-    };
-    checkSession();
-  }, [router, supabase.auth]);
-
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setLoading(false);
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Logged in successfully!");
-      router.push("/dashboard");
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Logged in successfully!");
+        router.push("/dashboard");
+      }
+    } catch (error) {
+      toast.error("An error occurred during login");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleOAuthLogin = async (provider: "google" | "discord") => {
-    setLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${location.origin}/auth/callback?next=/dashboard`,
-      },
-    });
-    setLoading(false);
-  };
-
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6">
-      {/* Back to Home */}
-      <div className="absolute top-8 left-8">
-        <Link
-          href="/"
-          className="text-white hover:text-gray-300 transition-colors"
-          style={{ fontFamily: 'Consolas, monospace' }}
-        >
-          ← [back]
-        </Link>
-      </div>
+    <div className="relative min-h-screen">
+      <FootballFieldBackground />
 
-      {/* Main Content */}
-      <div className="w-full max-w-md space-y-8">
-        {/* Title */}
-        <h1
-          className="text-white text-4xl font-normal text-center"
-          style={{ fontFamily: 'Consolas, monospace' }}
-        >
-          [log in]
-        </h1>
+      <div className="relative z-10 flex items-center justify-center min-h-screen">
+        <div className="w-full max-w-md p-8 bg-black/80 border border-white rounded-lg backdrop-blur-sm">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>
+              [endzone]
+            </h1>
+            <p className="text-gray-300" style={{ fontFamily: 'Consolas, monospace' }}>
+              [log in]
+            </p>
+          </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <Label
-              htmlFor="email"
-              className="text-white text-sm mb-2 block"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              className="bg-black border border-white text-white placeholder-gray-500 focus:ring-1 focus:ring-white focus:border-white rounded-none"
-              style={{ fontFamily: 'Consolas, monospace' }}
-              required
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <Label htmlFor="email" className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+                [email]
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="mt-2 bg-black border-white text-white placeholder-gray-400"
+                style={{ fontFamily: 'Consolas, monospace' }}
+                placeholder="[enter email]"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="password" className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+                [password]
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="mt-2 bg-black border-white text-white placeholder-gray-400"
+                style={{ fontFamily: 'Consolas, monospace' }}
+                placeholder="[enter password]"
+              />
+            </div>
+
+            <Button
+              type="submit"
               disabled={loading}
-            />
-          </div>
-
-          <div>
-            <Label
-              htmlFor="password"
-              className="text-white text-sm mb-2 block"
+              className="w-full bg-white text-black hover:bg-gray-200 transition-colors"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
-              password
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="bg-black border border-white text-white placeholder-gray-500 focus:ring-1 focus:ring-white focus:border-white rounded-none"
-              style={{ fontFamily: 'Consolas, monospace' }}
-              required
-              disabled={loading}
-            />
-          </div>
+              {loading ? "[logging in...]" : "[log in]"}
+            </Button>
+          </form>
 
-          <button
-            type="submit"
-            className="w-full py-3 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 disabled:opacity-50"
-            style={{ fontFamily: 'Consolas, monospace' }}
-            disabled={loading}
-          >
-            {loading ? "[signing in...]" : "[sign in]"}
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-700" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span
-              className="px-4 bg-black text-gray-500"
+          <div className="mt-6 text-center">
+            <Link
+              href="/auth/signup"
+              className="text-white hover:text-gray-300 transition-colors"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
-              or
-            </span>
+              [need an account? sign up]
+            </Link>
           </div>
-        </div>
 
-        {/* OAuth Buttons */}
-        <div className="space-y-4">
-          <button
-            onClick={() => handleOAuthLogin("google")}
-            className="w-full py-3 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 disabled:opacity-50"
-            style={{ fontFamily: 'Consolas, monospace' }}
-            disabled={loading}
-          >
-            [continue with google]
-          </button>
-
-          <button
-            onClick={() => handleOAuthLogin("discord")}
-            className="w-full py-3 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 disabled:opacity-50"
-            style={{ fontFamily: 'Consolas, monospace' }}
-            disabled={loading}
-          >
-            [continue with discord]
-          </button>
-        </div>
-
-        {/* Sign Up Link */}
-        <div className="text-center">
-          <Link
-            href="/auth/signup"
-            className="text-gray-400 hover:text-white transition-colors text-sm"
-            style={{ fontFamily: 'Consolas, monospace' }}
-          >
-            need an account? [sign up]
-          </Link>
+          <div className="mt-4 text-center">
+            <Link
+              href="/"
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              [back to home]
+            </Link>
+          </div>
         </div>
       </div>
     </div>

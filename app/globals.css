@@ -42,3 +42,39 @@ body {
     transition: none !important;
   }
 }
+
+/* Animated background gradient */
+.animated-bg {
+  background: linear-gradient(45deg, #000000, #111111, #0a0a0a, #000000);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Football field animation */
+.field-animation {
+  animation: moveField 8s linear infinite;
+}
+
+@keyframes moveField {
+  0% {
+    transform: translateY(-50vh);
+  }
+
+  100% {
+    transform: translateY(100vh);
+  }
+}

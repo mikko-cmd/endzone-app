@@ -23,4 +23,18 @@ export default function RootLayout({
       </body>
     </html>
   );
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html lang="en" className="animated-bg">
+        <body className="bg-black text-white">
+          {children}
+        </body>
+      </html>
+    )
+  }
 } 
