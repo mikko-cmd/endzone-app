@@ -39,6 +39,10 @@ interface EnhancedPlayerAnalysis {
         defensiveMatchup: number;
         overall: number;
     };
+    derived?: {
+        redZoneEff?: string; // formatted "X / Y (Z%)"
+        positionRank?: string; // e.g., WR9
+    };
 }
 
 interface EnhancedComparisonDetails {
@@ -173,6 +177,19 @@ class EnhancedPlayerComparison {
             contextualInsights.push('on bye week');
         }
 
+        // Derived display fields
+        const derived: any = {};
+        if (redZoneData) {
+            const t = redZoneData.rzTouchdowns || 0;
+            const a = redZoneData.rzAttempts || 0;
+            const r = a ? ((t / a) * 100).toFixed(1) : '0.0';
+            derived.redZoneEff = `${t} / ${a} (${r}%)`;
+        }
+        const posRank = dataParser.getPositionRank(playerName, position);
+        if (posRank && position) {
+            derived.positionRank = `${position.toUpperCase()}${posRank}`;
+        }
+
         return {
             playerId: playerName,
             playerName,
@@ -186,7 +203,8 @@ class EnhancedPlayerComparison {
             expertAnalysis,
             contextualInsights,
             weeklyOpponent,
-            scores
+            scores,
+            derived
         };
     }
 
@@ -670,7 +688,8 @@ export async function GET(request: Request) {
                 insights: p.contextualInsights.filter(insight => !insight.includes('draft value')), // Remove draft insights
                 weeklyOpponent: p.weeklyOpponent,
                 usage: p.position !== 'QB' ? (p.marketShare ? (p.marketShare.attPercent || p.marketShare.tgtPercent) : null) : null,
-                redZoneTDs: p.redZoneData?.rzTouchdowns || null
+                redZoneTDs: p.redZoneData?.rzTouchdowns || null,
+                derived: p.derived
             })),
             headToHead: comparison,
             rankings: {
@@ -699,8 +718,8 @@ export async function GET(request: Request) {
                     try {
                         const stats = dataParser.getDefenseStats(p.weeklyOpponent?.opponent || '');
                         if (!stats) return undefined;
-                        const { teamAbbr, teamName, games, pointsAllowed, totalYardsAllowed, yardsPerPlayAllowed, passCompletionsAllowed, passYardsAllowed, passTDsAllowed, netYardsPerAttemptAllowed, rushYardsAllowed, rushTDsAllowed, yardsPerRushAllowed, scorePct, turnoverPct, exp } = stats as any;
-                        return { teamAbbr, teamName, games, pointsAllowed, totalYardsAllowed, yardsPerPlayAllowed, passCompletionsAllowed, passYardsAllowed, passTDsAllowed, netYardsPerAttemptAllowed, rushYardsAllowed, rushTDsAllowed, yardsPerRushAllowed, scorePct, turnoverPct, exp };
+                        const { teamAbbr, teamName, games, pointsAllowed, totalYardsAllowed, yardsPerPlayAllowed, passCompletionsAllowed, passYardsAllowed, passTDsAllowed, netYardsPerAttemptAllowed, rushAttemptsFaced, rushYardsAllowed, rushTDsAllowed, yardsPerRushAllowed, scorePct, turnoverPct, exp } = stats as any;
+                        return { teamAbbr, teamName, games, pointsAllowed, totalYardsAllowed, yardsPerPlayAllowed, passCompletionsAllowed, passYardsAllowed, passTDsAllowed, netYardsPerAttemptAllowed, rushAttemptsFaced, rushYardsAllowed, rushTDsAllowed, yardsPerRushAllowed, scorePct, turnoverPct, exp };
                     } catch { return undefined; }
                 })()
             })),

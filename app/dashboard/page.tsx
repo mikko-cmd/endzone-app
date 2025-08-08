@@ -18,7 +18,6 @@ export default async function Dashboard() {
 
   if (error) {
     console.error('Failed to fetch leagues:', error)
-    // Optionally, you could render an error state here
   }
 
   return <DashboardClient user={user} initialLeagues={leagues || []} />

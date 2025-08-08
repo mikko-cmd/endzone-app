@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ChevronLeft, Users } from 'lucide-react';
+import { ChevronLeft, Users, Brain, TrendingUp, UserCheck } from 'lucide-react';
 import { timeAgo } from '@/lib/utils';
 import { PlayerStatsRow } from '@/components/PlayerStatsRow';
 import LoadingArc from '@/components/LoadingArc';
@@ -35,6 +35,29 @@ interface League {
   matchups_json: any[] | null;
   last_synced_matchups_at: string | null;
 }
+
+const AIToolsTab = ({
+  href,
+  icon,
+  children,
+  isActive = false
+}: {
+  href: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  isActive?: boolean;
+}) => (
+  <Link href={href}>
+    <div
+      className={`flex items-center space-x-2 px-4 py-2 border-r border-white/20 hover:bg-gray-900 transition-colors duration-200 ${isActive ? 'bg-gray-900' : ''
+        }`}
+      style={{ fontFamily: 'Consolas, monospace' }}
+    >
+      {icon}
+      <span className="text-white hover:text-gray-300">{children}</span>
+    </div>
+  </Link>
+);
 
 const RosterView = ({
   starters,
@@ -131,19 +154,34 @@ export default function LeagueDetailClient({ league }: { league: League }) {
               >
                 {league.rosters_json?.username || 'your team'}
               </p>
-              {/* REMOVED: synced timestamp display */}
             </div>
-            <Link href={`/league/${league.sleeper_league_id}/comparison`}>
-              <button
-                className="text-white border border-white hover:bg-white hover:text-black py-2 px-4 flex items-center transition-colors duration-200"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                <Users size={16} className="mr-2" />
-                [player comparison]
-              </button>
-            </Link>
           </div>
         </header>
+
+        {/* AI Tools Navigation */}
+        <div className="mb-8">
+          <div className="bg-black border border-white inline-flex rounded-none overflow-hidden">
+            <AIToolsTab
+              href={`/league/${league.sleeper_league_id}/comparison`}
+              icon={<Brain size={16} />}
+              isActive={true}
+            >
+              [who do i start]
+            </AIToolsTab>
+            <AIToolsTab
+              href={`/league/${league.sleeper_league_id}/waivers`}
+              icon={<TrendingUp size={16} />}
+            >
+              [waiver wire]
+            </AIToolsTab>
+            <AIToolsTab
+              href={`/league/${league.sleeper_league_id}/trades`}
+              icon={<UserCheck size={16} />}
+            >
+              [trade tools]
+            </AIToolsTab>
+          </div>
+        </div>
 
         {/* Roster Content */}
         {isMounted ? (

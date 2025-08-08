@@ -69,7 +69,7 @@ interface ComparisonResult {
     defensiveMatchupDetails?: DefensiveMatchupDetail[];
 }
 
-export default function PlayerComparisonPage({ params }: { params: { leagueId: string } }) {
+export default function WhoDoIStartPage() {
     const [playerFields, setPlayerFields] = useState<PlayerField[]>([
         { id: '1', value: '', selectedPlayer: null, showDropdown: false, suggestions: [] },
         { id: '2', value: '', selectedPlayer: null, showDropdown: false, suggestions: [] }
@@ -254,15 +254,6 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
         );
     };
 
-    const getCategoryIcon = (category: string) => {
-        switch (category) {
-            case 'defensiveMatchup': return <Shield size={16} className="text-white" />;
-            case 'recentPerformance': return <TrendingUp size={16} className="text-white" />;
-            case 'efficiency': return <Zap size={16} className="text-white" />;
-            default: return null;
-        }
-    };
-
     const renderComparisonResults = () => {
         if (!comparisonResult) return null;
 
@@ -321,10 +312,10 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                 </div>
 
                 {/* Defensive Matchup */}
-                <div className="bg-black border border-white rounded-xl p-6">
+                <div className="bg-black border border-white rounded-none p-6">
                     <h3 className="text-xl font-bold mb-4 flex items-center text-white" style={{ fontFamily: 'Consolas, monospace' }}>
                         <Shield size={20} className="mr-2" />
-                        Defensive Matchup
+                        [defensive matchup]
                     </h3>
                     {(() => {
                         const posLookup: Record<string, string> = Object.fromEntries(
@@ -334,7 +325,6 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                         const unique = Array.from(new Set(positions));
                         const isQB = unique.length === 1 && unique[0] === 'QB';
                         const isRB = unique.length === 1 && unique[0] === 'RB';
-                        // Default WR/TE table otherwise
 
                         const details = defensiveMatchupDetails || [];
                         const headerCell = 'px-3 py-2 border border-gray-700 text-xs uppercase tracking-wide text-gray-400';
@@ -345,12 +335,12 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                                 <table className="w-full border-collapse text-left" style={{ fontFamily: 'Consolas, monospace' }}>
                                     <thead>
                                         <tr>
-                                            <th className={headerCell}>Player</th>
-                                            <th className={headerCell}>Opponent</th>
-                                            <th className={headerCell}>Opp. Completions Allowed</th>
-                                            <th className={headerCell}>Opp. Pts Allowed</th>
-                                            <th className={headerCell}>Opp. Pass Yds Allowed</th>
-                                            <th className={headerCell}>Opp. Passing Td Allowed</th>
+                                            <th className={headerCell}>player</th>
+                                            <th className={headerCell}>opponent</th>
+                                            <th className={headerCell}>completions allowed</th>
+                                            <th className={headerCell}>pts allowed</th>
+                                            <th className={headerCell}>pass yds allowed</th>
+                                            <th className={headerCell}>pass td allowed</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -364,7 +354,7 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                                             return (
                                                 <tr key={rowKey}>
                                                     <td className={cell}>{d.player}</td>
-                                                    <td className={cell}>Rank {d.defenseRank ?? '—'} • {d.opponent} {d.home ? '(home)' : '(away)'}</td>
+                                                    <td className={cell}>rank {d.defenseRank ?? '—'} • {d.opponent} {d.home ? '(home)' : '(away)'}</td>
                                                     <td className={cell}>{typeof cmp === 'number' ? cmp.toFixed(1) : '—'}</td>
                                                     <td className={cell}>{typeof pts === 'number' ? pts.toFixed(1) : '—'}</td>
                                                     <td className={cell}>{typeof pyd === 'number' ? pyd.toFixed(0) : '—'}</td>
@@ -374,7 +364,7 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                                         })}
                                     </tbody>
                                 </table>
-                                <div className="text-right text-xs text-gray-500 mt-1" style={{ fontFamily: 'Consolas, monospace' }}>Per Game Averages</div>
+                                <div className="text-right text-xs text-gray-500 mt-1" style={{ fontFamily: 'Consolas, monospace' }}>per game averages</div>
                             </div>
                         );
 
@@ -383,11 +373,11 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                                 <table className="w-full border-collapse text-left" style={{ fontFamily: 'Consolas, monospace' }}>
                                     <thead>
                                         <tr>
-                                            <th className={headerCell}>Player</th>
-                                            <th className={headerCell}>Opponent</th>
-                                            <th className={headerCell}>Opp. Rush Att Allowed</th>
-                                            <th className={headerCell}>Opp. Rush Yds Allowed</th>
-                                            <th className={headerCell}>Opp. Rush TDs Allowed</th>
+                                            <th className={headerCell}>player</th>
+                                            <th className={headerCell}>opponent</th>
+                                            <th className={headerCell}>rush att allowed</th>
+                                            <th className={headerCell}>rush yds allowed</th>
+                                            <th className={headerCell}>rush tds allowed</th>
                                             <th className={headerCell}></th>
                                         </tr>
                                     </thead>
@@ -401,7 +391,7 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                                             return (
                                                 <tr key={rowKey}>
                                                     <td className={cell}>{d.player}</td>
-                                                    <td className={cell}>Rank {d.defenseRank ?? '—'} • {d.opponent} {d.home ? '(home)' : '(away)'}</td>
+                                                    <td className={cell}>rank {d.defenseRank ?? '—'} • {d.opponent} {d.home ? '(home)' : '(away)'}</td>
                                                     <td className={cell}>{typeof ratt === 'number' ? ratt.toFixed(1) : '—'}</td>
                                                     <td className={cell}>{typeof ryds === 'number' ? ryds.toFixed(0) : '—'}</td>
                                                     <td className={cell}>{typeof rtd === 'number' ? rtd.toFixed(2) : '—'}</td>
@@ -418,11 +408,11 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                             return (
                                 <div className="space-y-6">
                                     <div>
-                                        <h4 className="font-semibold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>Defensive Matchup Passing Stats</h4>
+                                        <h4 className="font-semibold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>[passing stats]</h4>
                                         {renderPassTable()}
                                     </div>
                                     <div>
-                                        <h4 className="font-semibold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>Defensive Matchup Rushing Stats</h4>
+                                        <h4 className="font-semibold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>[rushing stats]</h4>
                                         {renderRushTable()}
                                     </div>
                                 </div>
@@ -437,15 +427,14 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                     })()}
                 </div>
 
-                {/* Category Breakdown - redesigned */}
-                <div className="bg-black border border-white rounded-xl p-6">
+                {/* Category Breakdown */}
+                <div className="bg-black border border-white rounded-none p-6">
                     <h3 className="text-xl font-bold mb-4 text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                        Category Breakdown
+                        [category breakdown]
                     </h3>
                     {(() => {
                         const headerCell = 'px-3 py-2 border border-gray-700 text-xs uppercase tracking-wide text-gray-400';
                         const cell = 'px-3 py-2 border border-gray-700 text-sm text-white';
-                        const pct = (n: number) => `${n.toFixed(1)}%`;
 
                         const players = (comparisonResult.players || []) as Array<{
                             name: string;
@@ -453,11 +442,9 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                             scores: { defensiveMatchup: number };
                             redZoneTDs?: number | null;
                             weeklyOpponent?: any;
-                            // derived fields from API
                             derived?: { redZoneEff?: string; positionRank?: string };
                         }>;
 
-                        // Helper to grade defensive matchup score
                         const grade = (score: number) => {
                             if (score >= 95) return 'A+';
                             if (score >= 90) return 'A';
@@ -488,38 +475,33 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
                             </div>
                         );
 
-                        // 1) Red Zone Efficiency table
                         const rzRows = players.map(p => ({
                             name: p.name,
                             value: p.derived?.redZoneEff ?? '—'
                         }));
 
-                        // 2) Positional Ranking (ADP) table
                         const posRows = players.map(p => ({
                             name: p.name,
                             value: p.derived?.positionRank ?? '—'
                         }));
 
-                        // 3) Defensive Matchup grade table
                         const defRows = players.map(p => ({
                             name: p.name,
                             value: grade(p.scores.defensiveMatchup)
                         }));
 
-                        // 4) Projected Points (placeholder)
                         const projected = new Map<string, number>();
                         players.forEach(p => {
-                            // simple placeholder defaults; customize if desired per player name
                             projected.set(p.name, projected.get(p.name) ?? (players.indexOf(p) === 0 ? 17 : 13));
                         });
                         const projRows = players.map(p => ({ name: p.name, value: String(projected.get(p.name) ?? 12) }));
 
                         return (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
-                                {renderTable('Red Zone Efficiency', rzRows)}
-                                {renderTable('Positional Ranking', posRows)}
-                                {renderTable('Defensive Matchup', defRows)}
-                                {renderTable('Projected Points (PPR)', projRows)}
+                                {renderTable('[red zone efficiency]', rzRows)}
+                                {renderTable('[positional ranking]', posRows)}
+                                {renderTable('[defensive matchup]', defRows)}
+                                {renderTable('[projected points (ppr)]', projRows)}
                             </div>
                         );
                     })()}
@@ -529,18 +511,18 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
     };
 
     return (
-        <div className="min-h-screen bg-black text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-            <div className="container mx-auto px-4 py-8">
+        <div className="min-h-screen bg-black text-white p-4 sm:p-8">
+            <div className="w-full max-w-6xl mx-auto">
                 <Link
-                    href={`/league/${params.leagueId}`}
+                    href="/tools"
                     className="inline-flex items-center text-white hover:text-gray-300 mb-6 transition-colors"
                     style={{ fontFamily: 'Consolas, monospace' }}
                 >
                     <ChevronLeft size={20} className="mr-2" />
-                    [back to team page]
+                    [back to ai tools]
                 </Link>
 
-                <header className="mb-8 border-b border-white pb-4">
+                <header className="mb-8 border-b border-white/20 pb-4">
                     <h1 className="text-3xl sm:text-5xl font-bold mb-2" style={{ fontFamily: 'Consolas, monospace' }}>
                         [who do i start]
                     </h1>
@@ -610,4 +592,4 @@ export default function PlayerComparisonPage({ params }: { params: { leagueId: s
             </div>
         </div>
     );
-} 
+}

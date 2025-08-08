@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import type { User } from '@supabase/supabase-js';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Users, Brain, Search, Newspaper } from 'lucide-react';
 
 interface RosterData {
   username: string;
@@ -44,14 +44,38 @@ const LeagueCard: React.FC<LeagueCardProps> = ({ league }) => {
   return (
     <Link href={`/league/${league.sleeper_league_id}`}>
       <div
-        className="cursor-pointer bg-black text-white border border-white p-6 hover:bg-gray-900 hover:border-gray-300 transition-all duration-200 ease-in-out"
+        className="cursor-pointer bg-black text-white border border-white/20 p-4 hover:bg-gray-900 hover:border-white/40 transition-all duration-200 ease-in-out"
         style={{ fontFamily: 'Consolas, monospace' }}
       >
-        <h2 className="text-xl font-normal mb-2">[{league.league_name}]</h2>
-        <p className="text-sm text-gray-400">id: {league.sleeper_league_id}</p>
+        <h3 className="text-lg font-normal mb-1">[{league.league_name}]</h3>
+        <p className="text-xs text-gray-400">id: {league.sleeper_league_id}</p>
         {league.rosters_json?.username && (
-          <p className="text-sm text-gray-400">team: {league.rosters_json.username}</p>
+          <p className="text-xs text-gray-400">team: {league.rosters_json.username}</p>
         )}
+      </div>
+    </Link>
+  );
+};
+
+interface HubTileProps {
+  title: string;
+  description: string;
+  href: string;
+  icon: React.ReactNode;
+}
+
+const HubTile: React.FC<HubTileProps> = ({ title, description, href, icon }) => {
+  return (
+    <Link href={href}>
+      <div
+        className="cursor-pointer bg-black text-white border border-white/20 p-6 hover:bg-gray-900 hover:border-white/40 transition-all duration-200 ease-in-out h-full"
+        style={{ fontFamily: 'Consolas, monospace' }}
+      >
+        <div className="flex items-center space-x-3 mb-3">
+          {icon}
+          <h3 className="text-xl font-normal">[{title}]</h3>
+        </div>
+        <p className="text-sm text-gray-400">{description}</p>
       </div>
     </Link>
   );
@@ -75,48 +99,6 @@ export default function DashboardClient({
   const router = useRouter();
   const supabase = createClient();
   const userEmail = user.email;
-
-  useEffect(() => {
-    console.log('[DashboardClient] Leagues loaded:', leagues.length, leagues);
-  }, [leagues]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast.success('Logged out successfully!');
-    router.push('/auth/login');
-  };
-
-  const handleSyncRoster = useCallback(
-    async (sleeper_league_id: string, email: string, username: string) => {
-      try {
-        const response = await fetch('/api/rosters/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sleeper_league_id,
-            user_email: email,
-            sleeper_username: username,
-          }),
-        });
-
-        const result = await response.json();
-        if (!response.ok || !result.data) {
-          throw new Error(result.error || 'Failed to sync roster.');
-        }
-
-        setLeagues(prev =>
-          prev.map(l =>
-            l.sleeper_league_id === sleeper_league_id ? result.data : l
-          )
-        );
-        return result.data;
-      } catch (error: any) {
-        console.error('Sync Roster Error:', error);
-        toast.error(error.message);
-      }
-    },
-    []
-  );
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -145,25 +127,15 @@ export default function DashboardClient({
       const newLeague = result.data as League;
       toast.success(`League "${newLeague.league_name}" connected!`);
 
-      const syncedLeague = await handleSyncRoster(
-        newLeague.sleeper_league_id,
-        newLeague.user_email,
-        sleeperUsername
-      );
-
-      if (syncedLeague) {
-        setLeagues(prevLeagues => {
-          const existingIndex = prevLeagues.findIndex(
-            l => l.id === syncedLeague.id
-          );
-          if (existingIndex > -1) {
-            const updated = [...prevLeagues];
-            updated[existingIndex] = syncedLeague;
-            return updated;
-          }
-          return [...prevLeagues, syncedLeague];
-        });
-      }
+      setLeagues(prevLeagues => {
+        const existingIndex = prevLeagues.findIndex(l => l.id === newLeague.id);
+        if (existingIndex > -1) {
+          const updated = [...prevLeagues];
+          updated[existingIndex] = newLeague;
+          return updated;
+        }
+        return [...prevLeagues, newLeague];
+      });
 
       setIsModalOpen(false);
       setLeagueId('');
@@ -178,45 +150,110 @@ export default function DashboardClient({
 
   return (
     <div className="min-h-screen bg-black text-white p-4 sm:p-8">
-      <div className="w-full max-w-4xl mx-auto">
+      <div className="w-full max-w-6xl mx-auto">
         {/* Header */}
-        <header className="flex justify-between items-center mb-12">
+        <header className="mb-12">
           <h1
-            className="text-4xl sm:text-5xl font-normal"
+            className="text-4xl sm:text-5xl font-normal mb-4"
             style={{ fontFamily: 'Consolas, monospace' }}
           >
-            [dashboard]
+            [home]
           </h1>
-          <div className="flex items-center space-x-6">
-            {userEmail && (
-              <p
-                className="text-sm text-gray-400 hidden md:block"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                {userEmail}
-              </p>
-            )}
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              [log out]
-            </button>
-          </div>
+          <p
+            className="text-lg text-gray-400"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            welcome back, {userEmail}
+          </p>
         </header>
 
-        {/* Add League Button */}
-        <div className="mb-12 text-center">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 flex items-center mx-auto"
+        {/* Hub Tiles */}
+        <section className="mb-12">
+          <h2
+            className="text-2xl font-normal mb-6"
             style={{ fontFamily: 'Consolas, monospace' }}
           >
-            <PlusCircle className="mr-2" size={16} />
-            [connect sleeper league]
-          </button>
-        </div>
+            [quick access]
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <HubTile
+              title="My Leagues"
+              description="View and manage your fantasy leagues"
+              href="/leagues"
+              icon={<Users size={20} />}
+            />
+            <HubTile
+              title="AI Tools"
+              description="Player comparisons, waiver picks, trades"
+              href="/tools"
+              icon={<Brain size={20} />}
+            />
+            <HubTile
+              title="Research"
+              description="Player stats, ADP rankings, DFS tools"
+              href="/research"
+              icon={<Search size={20} />}
+            />
+            <HubTile
+              title="News"
+              description="Injury reports and league updates"
+              href="/news"
+              icon={<Newspaper size={20} />}
+            />
+          </div>
+        </section>
+
+        {/* Recent Activity Placeholder */}
+        <section className="mb-12">
+          <h2
+            className="text-2xl font-normal mb-6"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            [recent activity]
+          </h2>
+          <div
+            className="bg-black border border-white/20 p-6"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            <p className="text-gray-400">activity feed coming soon...</p>
+          </div>
+        </section>
+
+        {/* Leagues Section */}
+        <section>
+          <div className="flex justify-between items-center mb-6">
+            <h2
+              className="text-2xl font-normal"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              [your leagues]
+            </h2>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-2 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 flex items-center"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              <PlusCircle className="mr-2" size={16} />
+              [connect league]
+            </button>
+          </div>
+
+          {leagues.length === 0 ? (
+            <div
+              className="text-center text-gray-400 space-y-2 py-8"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              <p>no leagues connected yet</p>
+              <p className="text-sm">click the button above to get started</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {leagues.map(league => (
+                <LeagueCard key={league.id} league={league} />
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Modal */}
         {isModalOpen && (
@@ -286,32 +323,6 @@ export default function DashboardClient({
             </div>
           </div>
         )}
-
-        {/* Leagues Section */}
-        <section>
-          <h2
-            className="text-2xl font-normal mb-8 pb-2 border-b border-gray-700"
-            style={{ fontFamily: 'Consolas, monospace' }}
-          >
-            [your leagues]
-          </h2>
-          {leagues.length === 0 ? (
-            <div
-              className="text-center text-gray-400 space-y-2"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              <p>no leagues connected yet</p>
-              <p className="text-sm">click the button above to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {leagues.map(league => {
-                console.log('[DashboardClient] Rendering league card for:', league.league_name);
-                return <LeagueCard key={league.id} league={league} />;
-              })}
-            </div>
-          )}
-        </section>
       </div>
     </div>
   );

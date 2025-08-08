@@ -732,10 +732,26 @@ export class DataParser {
     }
 
     /**
+     * Get position-specific ADP rank (1-based) using PPR ADP
+     */
+    getPositionRank(playerName: string, position: string): number | null {
+        if (!this.adpData || this.adpData.length === 0) return null;
+        const pos = position.toUpperCase();
+        const filtered = this.adpData
+            .filter(p => (p.position || '').toUpperCase() === pos && typeof p.ppr === 'number')
+            .sort((a, b) => (a.ppr ?? 999) - (b.ppr ?? 999));
+        if (filtered.length === 0) return null;
+        const index = filtered.findIndex(p => p.name.toLowerCase() === playerName.toLowerCase());
+        if (index === -1) return null;
+        return index + 1;
+    }
+
+    /**
      * Parse 2024 defensive stats from CSV
      */
     async parseDefenseStats(): Promise<void> {
-        if (Object.keys(this.defenseStatsByAbbr).length > 0) return;
+        // Always refresh to avoid stale caches if CSV schema changes
+        this.defenseStatsByAbbr = {};
         try {
             const filePath = path.join(process.cwd(), 'data/research/2024_defensive_stats.csv');
             if (!fs.existsSync(filePath)) return;
