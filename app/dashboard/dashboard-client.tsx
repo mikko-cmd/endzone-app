@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { toast } from 'react-hot-toast';
 import type { User } from '@supabase/supabase-js';
 import { PlusCircle, Users, Brain, Search, Newspaper } from 'lucide-react';
 
@@ -103,7 +102,6 @@ export default function DashboardClient({
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!leagueId || !userEmail || !sleeperUsername) {
-      toast.error('Please provide a League ID and your Sleeper Username.');
       return;
     }
     setSyncingLeague(true);
@@ -125,7 +123,6 @@ export default function DashboardClient({
       }
 
       const newLeague = result.data as League;
-      toast.success(`League "${newLeague.league_name}" connected!`);
 
       setLeagues(prevLeagues => {
         const existingIndex = prevLeagues.findIndex(l => l.id === newLeague.id);
@@ -142,7 +139,6 @@ export default function DashboardClient({
       setSleeperUsername('');
     } catch (error: any) {
       console.error('Connect League Error:', error);
-      toast.error(error.message);
     } finally {
       setSyncingLeague(false);
     }

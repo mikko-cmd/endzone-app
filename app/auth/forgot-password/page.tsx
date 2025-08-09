@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMemo, useState } from "react";
-import { toast } from "react-hot-toast";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -17,9 +16,9 @@ export default function ForgotPassword() {
     });
 
     if (error) {
-      toast.error(error.message);
+      // no toast
     } else {
-      toast.success("Password reset link sent! Please check your email.");
+      // no toast
     }
   };
 

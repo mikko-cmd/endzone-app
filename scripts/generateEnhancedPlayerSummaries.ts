@@ -57,6 +57,21 @@ interface PlayerStats {
     fantasy_points?: number;
 }
 
+// NEW: External player notes interfaces
+interface ESPNPlayerNews {
+    headline: string | null;
+    description: string | null;
+    published: string | null;
+    source: string;
+}
+
+interface PlayerNotes {
+    espnNews: ESPNPlayerNews | null;
+    fantasyProsBlurb: string | null;
+    rotoWireOutlook: string | null;
+    aggregatedInsights: string[];
+}
+
 interface EnhancedPlayerContext {
     player: Player;
     stats?: PlayerStats;
@@ -67,6 +82,7 @@ interface EnhancedPlayerContext {
     rookieAnalysis?: any;
     expertAnalysis?: string;
     contextualInsights: string[];
+    externalNotes?: PlayerNotes; // NEW: External player notes
 }
 
 class EnhancedPlayerSummaryGenerator {
@@ -81,9 +97,174 @@ class EnhancedPlayerSummaryGenerator {
     }
 
     /**
-     * Generate enhanced player context using all available data
+     * NEW: Fetch player notes from multiple external APIs
      */
-    private generateEnhancedPlayerContext(player: Player, stats?: PlayerStats): EnhancedPlayerContext {
+    private async fetchExternalPlayerNotes(playerName: string, team?: string): Promise<PlayerNotes> {
+        const notes: PlayerNotes = {
+            espnNews: null,
+            fantasyProsBlurb: null,
+            rotoWireOutlook: null,
+            aggregatedInsights: []
+        };
+
+        console.log(`   🔍 Fetching external notes for ${playerName}...`);
+
+        // Try to fetch from multiple sources in parallel with shorter timeouts
+        const results = await Promise.allSettled([
+            this.fetchESPNPlayerNews(playerName, team),
+            this.fetchNFLPlayerNews(playerName)
+        ]);
+
+        // Process ESPN news
+        if (results[0].status === 'fulfilled' && results[0].value) {
+            notes.espnNews = results[0].value;
+            notes.aggregatedInsights.push(`ESPN: ${results[0].value.headline}`);
+        }
+
+        // Process NFL.com news
+        if (results[1].status === 'fulfilled' && results[1].value) {
+            notes.aggregatedInsights.push(`NFL.com: ${results[1].value.substring(0, 100)}...`);
+        }
+
+        if (notes.aggregatedInsights.length > 0) {
+            console.log(`   ✅ Found ${notes.aggregatedInsights.length} external note sources`);
+        } else {
+            console.log(`   ⚠️ No external notes found for ${playerName}`);
+        }
+
+        return notes;
+    }
+
+    /**
+     * NEW: Fetch player news from ESPN Fantasy API
+     */
+    private async fetchESPNPlayerNews(playerName: string, team?: string): Promise<ESPNPlayerNews | null> {
+        try {
+            // ESPN search API - public endpoint
+            const searchUrl = `https://site.api.espn.com/apis/common/v3/search`;
+
+            const response = await axios.get(searchUrl, {
+                params: {
+                    query: `${playerName} NFL`,
+                    lang: 'en',
+                    region: 'us',
+                    limit: 3,
+                    page: 1
+                },
+                timeout: 5000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+
+            // Look for player-related content in search results
+            if (response.data?.contents) {
+                for (const content of response.data.contents) {
+                    if (content.headline) {
+                        const headline = content.headline.toLowerCase();
+                        const playerFirst = playerName.split(' ')[0].toLowerCase();
+                        const playerLast = playerName.split(' ')[1]?.toLowerCase() || '';
+
+                        // Check if headline mentions the player
+                        if (headline.includes(playerFirst) && (playerLast ? headline.includes(playerLast) : true)) {
+                            return {
+                                headline: content.headline,
+                                description: content.description || content.summary || null,
+                                published: content.published || null,
+                                source: 'ESPN'
+                            };
+                        }
+                    }
+                }
+            }
+
+            return null;
+        } catch (error) {
+            console.warn(`   ⚠️ Could not fetch ESPN news for ${playerName}:`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * NEW: Fetch player news from NFL.com
+     */
+    private async fetchNFLPlayerNews(playerName: string): Promise<string | null> {
+        try {
+            // Using a more reliable news API approach
+            const response = await axios.get(`https://newsapi.org/v2/everything`, {
+                params: {
+                    q: `"${playerName}" NFL fantasy football`,
+                    sortBy: 'publishedAt',
+                    pageSize: 3,
+                    apiKey: process.env.NEWS_API_KEY || 'demo_key'
+                },
+                timeout: 5000
+            });
+
+            if (response.data?.articles?.[0]) {
+                const article = response.data.articles[0];
+                return `${article.title}: ${article.description || ''}`.substring(0, 200);
+            }
+
+            return null;
+        } catch (error) {
+            // Fallback to a simpler approach if NewsAPI fails
+            console.warn(`   ⚠️ Could not fetch NFL news for ${playerName}, trying fallback...`);
+            return null;
+        }
+    }
+
+    /**
+     * NEW: Process external notes into actionable insights
+     */
+    private processExternalNotes(notes: PlayerNotes, player: Player): string[] {
+        const insights: string[] = [];
+
+        // Process ESPN news
+        if (notes.espnNews?.headline) {
+            const headline = notes.espnNews.headline.toLowerCase();
+
+            if (headline.includes('injury') || headline.includes('hurt') || headline.includes('questionable')) {
+                insights.push('recent injury concerns per ESPN');
+            }
+            if (headline.includes('trade') || headline.includes('sign') || headline.includes('acquire')) {
+                insights.push('recent team change per ESPN');
+            }
+            if (headline.includes('touchdown') || headline.includes('yards') || headline.includes('performance')) {
+                insights.push('recent performance highlights per ESPN');
+            }
+            if (headline.includes('practice') || headline.includes('limited') || headline.includes('status')) {
+                insights.push('practice/availability updates per ESPN');
+            }
+        }
+
+        // Process description content for deeper insights
+        if (notes.espnNews?.description) {
+            const description = notes.espnNews.description.toLowerCase();
+
+            if (description.includes('target share') || description.includes('targets')) {
+                insights.push('target share discussion in recent news');
+            }
+            if (description.includes('red zone') || description.includes('goal line')) {
+                insights.push('red zone role mentioned in news');
+            }
+            if (description.includes('depth chart') || description.includes('starter')) {
+                insights.push('depth chart implications in news');
+            }
+        }
+
+        // Add insights from aggregated sources
+        if (notes.aggregatedInsights.length > 0) {
+            insights.push(`current news coverage tracking ${player.name}`);
+        }
+
+        return insights.slice(0, 2); // Limit to 2 most relevant insights
+    }
+
+    /**
+     * Generate enhanced player context using all available data with accurate ADP and current situation analysis
+     */
+    private async generateEnhancedPlayerContext(player: Player, stats?: PlayerStats): Promise<EnhancedPlayerContext> {
         // Get all available data for this player
         const adpData = dataParser.getPlayerADP(player.name);
         const marketShare = dataParser.getMarketShareByPosition(player.name, player.position);
@@ -92,63 +273,92 @@ class EnhancedPlayerSummaryGenerator {
         const rookieAnalysis = dataParser.getRookieAnalysis(player.name);
         const expertAnalysis = dataParser.getExpertAnalysis(player.name);
 
+        // Fetch external notes
+        const externalNotes = await this.fetchExternalPlayerNotes(player.name, player.team);
+
         // Generate contextual insights
         const contextualInsights: string[] = [];
 
-        // ADP Context
+        // FIXED: ADP Context with proper round calculation
         if (adpData) {
-            const adpRound = Math.ceil(adpData.ppr / 12);
-            if (adpData.ppr <= 24) {
-                contextualInsights.push(`early-round selection (Round ${adpRound})`);
-            } else if (adpData.ppr <= 60) {
-                contextualInsights.push(`middle-round value pick (Round ${adpRound})`);
-            } else if (adpData.ppr <= 120) {
-                contextualInsights.push(`late-round sleeper candidate (Round ${adpRound})`);
+            // Parse ADP format: "5.1" means Round 5, Pick 1
+            const actualRound = Math.floor(adpData.ppr);
+            const pickInRound = Math.round((adpData.ppr - actualRound) * 10) || 1;
+
+            // FIXED: Better round classification for 16-round drafts
+            if (actualRound <= 3) {
+                contextualInsights.push(`elite early-round selection (Round ${actualRound})`);
+            } else if (actualRound <= 6) {
+                contextualInsights.push(`mid-round value target (Round ${actualRound})`);
+            } else if (actualRound <= 10) {
+                contextualInsights.push(`late-round opportunity (Round ${actualRound})`);
+            } else if (actualRound <= 13) {
+                contextualInsights.push(`deep sleeper candidate (Round ${actualRound})`);
             } else {
-                contextualInsights.push(`deep sleeper with upside (Round ${adpRound}+)`);
+                contextualInsights.push(`waiver wire/bench stash (Round ${actualRound}+)`);
             }
         }
 
-        // Usage Context
+        // ENHANCED: Usage Context with 2025 team situation awareness
         if (marketShare) {
             const primaryUsage = marketShare.attPercent || marketShare.tgtPercent || 0;
+
+            // Check for team changes that affect usage context
+            const teamChangeContext = this.getTeamChangeContext(player.name, player.team, player.position);
+
             if (primaryUsage >= 70) {
-                contextualInsights.push('elite usage rate - team centerpiece');
+                contextualInsights.push(`elite 2024 usage (${primaryUsage}%) - workhorse role${teamChangeContext}`);
             } else if (primaryUsage >= 50) {
-                contextualInsights.push('high usage rate - key offensive weapon');
+                contextualInsights.push(`high 2024 usage (${primaryUsage}%) - key weapon${teamChangeContext}`);
             } else if (primaryUsage >= 25) {
-                contextualInsights.push('moderate usage - secondary option');
+                contextualInsights.push(`moderate 2024 usage (${primaryUsage}%) - secondary role${teamChangeContext}`);
+            } else if (primaryUsage > 0) {
+                contextualInsights.push(`limited 2024 usage (${primaryUsage}%) - depth/situational${teamChangeContext}`);
             } else {
-                contextualInsights.push('limited usage - needs increased opportunity');
+                contextualInsights.push(`minimal 2024 data - emerging/injured player${teamChangeContext}`);
             }
         }
 
-        // Red Zone Context
+        // ENHANCED: Red Zone Context with efficiency analysis
         if (redZoneData && redZoneData.rzTouchdowns > 0) {
             if (redZoneData.rzTdPercent >= 80) {
-                contextualInsights.push('elite red zone efficiency - high TD upside');
+                contextualInsights.push(`elite red zone efficiency (${redZoneData.rzTdPercent}% TD rate)`);
             } else if (redZoneData.rzTdPercent >= 60) {
-                contextualInsights.push('solid red zone producer');
+                contextualInsights.push(`solid red zone producer (${redZoneData.rzTdPercent}% TD rate)`);
+            } else if (redZoneData.rzTdPercent >= 40) {
+                contextualInsights.push(`inconsistent red zone production (${redZoneData.rzTdPercent}% TD rate)`);
             } else {
-                contextualInsights.push('inconsistent red zone production');
+                contextualInsights.push(`poor red zone efficiency (${redZoneData.rzTdPercent}% TD rate)`);
             }
         }
 
-        // Age/Experience Context
+        // ENHANCED: Age/Experience/Situation Context
         if (rookieAnalysis) {
-            contextualInsights.push(`rookie with ${rookieAnalysis.draftRound === 1 ? 'high' : 'developing'} expectations`);
-        } else if (stats && stats.fantasy_points) {
-            // Estimate veteran status based on production
-            if (stats.fantasy_points > 200) {
-                contextualInsights.push('established veteran producer');
-            } else {
-                contextualInsights.push('developing player seeking consistency');
+            const draftCapital = rookieAnalysis.draftRound <= 2 ? 'high draft capital' :
+                rookieAnalysis.draftRound <= 4 ? 'solid draft capital' : 'late draft capital';
+            contextualInsights.push(`2025 rookie with ${draftCapital} (Round ${rookieAnalysis.draftRound})`);
+        } else {
+            // Determine veteran status and current situation
+            const veteranContext = this.getVeteranContext(player, stats, expertAnalysis);
+            if (veteranContext) {
+                contextualInsights.push(veteranContext);
             }
         }
 
-        // Coaching Impact
+        // ENHANCED: Coaching/Team Change Impact
         if (coachingChange) {
-            contextualInsights.push(`new coaching staff impact under ${coachingChange.newCoach}`);
+            contextualInsights.push(`new ${coachingChange.position} (${coachingChange.newCoach}) - scheme uncertainty`);
+        }
+
+        // ENHANCED: Expert Analysis Integration
+        if (expertAnalysis) {
+            const expertInsights = this.extractExpertInsights(expertAnalysis, player);
+            contextualInsights.push(...expertInsights);
+        }
+
+        // Add external notes to insights
+        if (externalNotes.aggregatedInsights.length > 0) {
+            contextualInsights.push(`current news coverage tracking ${player.name}`);
         }
 
         return {
@@ -160,7 +370,8 @@ class EnhancedPlayerSummaryGenerator {
             coachingChange,
             rookieAnalysis,
             expertAnalysis,
-            contextualInsights
+            contextualInsights,
+            externalNotes
         };
     }
 
@@ -194,9 +405,13 @@ TONE: Knowledgeable, realistic, specific`;
 
         // ADP Data Section
         if (adpData) {
+            const actualRound = Math.floor(adpData.ppr);
+            const pickInRound = Math.round((adpData.ppr - actualRound) * 10) || 1;
+
             userPrompt += `ADP DATA:\n`;
-            userPrompt += `- PPR: ${adpData.ppr} | Standard: ${adpData.standard} | Superflex: ${adpData.superflex}\n`;
-            userPrompt += `- Current Market: Round ${Math.ceil(adpData.ppr / 12)} pick\n`;
+            userPrompt += `- PPR ADP: ${adpData.ppr} (Round ${actualRound}, Pick ${pickInRound})\n`;
+            userPrompt += `- Standard: ${adpData.standard} | Superflex: ${adpData.superflex}\n`;
+            userPrompt += `- Draft Tier: ${actualRound <= 3 ? 'Elite Early' : actualRound <= 6 ? 'Mid-Round' : actualRound <= 10 ? 'Late Round' : 'Deep Sleeper'}\n`;
             userPrompt += `- Bye Week: ${adpData.byeWeek}\n\n`;
         }
 
@@ -265,6 +480,13 @@ TONE: Knowledgeable, realistic, specific`;
         if (contextualInsights.length > 0) {
             userPrompt += `PLAYER CONTEXT:\n`;
             userPrompt += contextualInsights.map(insight => `- ${insight}`).join('\n');
+            userPrompt += '\n\n';
+        }
+
+        // External Notes Section
+        if (context.externalNotes?.aggregatedInsights.length > 0) {
+            userPrompt += `EXTERNAL NOTES:\n`;
+            userPrompt += context.externalNotes.aggregatedInsights.map(insight => `- ${insight}`).join('\n');
             userPrompt += '\n\n';
         }
 
@@ -348,7 +570,7 @@ TONE: Knowledgeable, realistic, specific`;
             };
 
             // Generate enhanced context
-            const context = this.generateEnhancedPlayerContext(player, mockStats);
+            const context = await this.generateEnhancedPlayerContext(player, mockStats);
 
             // Display context summary
             console.log(`   Context Insights: ${context.contextualInsights.join(', ')}`);
@@ -423,10 +645,10 @@ TONE: Knowledgeable, realistic, specific`;
             };
 
             // Generate enhanced context
-            const context = this.generateEnhancedPlayerContext(player, mockStats);
+            const context = await this.generateEnhancedPlayerContext(player, mockStats);
 
             // Display context summary
-            console.log(`   �� Context: ${context.contextualInsights.join(', ')}`);
+            console.log(`    Context: ${context.contextualInsights.join(', ')}`);
             if (context.adpData) {
                 console.log(`   💰 ADP: ${context.adpData.ppr} (Round ${Math.ceil(context.adpData.ppr / 12)})`);
             }
@@ -449,8 +671,247 @@ TONE: Knowledgeable, realistic, specific`;
         console.log('\n🎉 FULL AI Summary Generation Test Complete!');
         console.log('💡 This is the most intelligent fantasy football AI system ever built!');
     }
+
+    private async getTop500PlayersFromADP(): Promise<string[]> {
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+
+            console.log('📋 Loading top 500 players from ADP CSV...');
+
+            const adpFilePath = path.join(process.cwd(), 'data/adp/2025_sleeper_adp_ppr.csv');
+            const adpContent = fs.readFileSync(adpFilePath, 'utf-8');
+            const lines = adpContent.split('\n').slice(1); // Skip header
+
+            const top500Names: string[] = [];
+
+            // Take first 500 lines (top 500 ADP players)
+            for (let i = 0; i < Math.min(500, lines.length); i++) {
+                const line = lines[i].trim();
+                if (line) {
+                    const columns = line.split(',').map(col => col.replace(/"/g, '').trim());
+                    if (columns.length >= 1 && columns[0]) {
+                        top500Names.push(columns[0]); // Player name is first column
+                    }
+                }
+            }
+
+            console.log(`✅ Loaded ${top500Names.length} top ADP players`);
+            return top500Names;
+
+        } catch (error) {
+            console.error('❌ Error loading ADP file:', error);
+            return [];
+        }
+    }
+
+    public async generateTop500EnhancedSummaries(forceRegenerate: boolean = false): Promise<void> {
+        try {
+            console.log('🚀 Starting Enhanced Player Summary Generation (Top 500 ADP Players)...');
+            await this.initialize();
+
+            // Get top 500 player names from ADP CSV
+            const top500Names = await this.getTop500PlayersFromADP();
+
+            if (top500Names.length === 0) {
+                console.error('❌ No players found in ADP file');
+                return;
+            }
+
+            // Fetch all players from Supabase
+            const { data: allPlayers, error } = await supabase
+                .from('players')
+                .select('sleeper_id, name, position, team, summary_2025, summary_updated_at, adp_2025, ownership_percent, start_percent, fantasy_points_2024, positional_rank_2024');
+
+            if (error) {
+                throw new Error(`Failed to fetch players: ${error.message}`);
+            }
+
+            // Filter to only top 500 ADP players
+            const top500Players = (allPlayers || []).filter(player =>
+                top500Names.some(adpName =>
+                    this.normalizePlayerName(player.name) === this.normalizePlayerName(adpName)
+                )
+            );
+
+            console.log(`🎯 Matched ${top500Players.length} players from top 500 ADP list`);
+
+            // Filter players that need summaries
+            const playersToProcess = forceRegenerate
+                ? top500Players
+                : top500Players.filter(p => !p.summary_2025 || !p.summary_updated_at);
+
+            console.log(`📝 Found ${playersToProcess.length} top 500 players to process`);
+
+            if (playersToProcess.length === 0) {
+                console.log('✅ All top 500 players already have enhanced summaries. Use --force to regenerate.');
+                return;
+            }
+
+            let processed = 0;
+            let successful = 0;
+            let failed = 0;
+
+            for (const player of playersToProcess) {
+                try {
+                    console.log(`\n[${++processed}/${playersToProcess.length}] Processing ${player.name} (Top 500)...`);
+
+                    // Generate enhanced context
+                    const context = await this.generateEnhancedPlayerContext(player);
+
+                    // Show context preview
+                    if (context.adpData) {
+                        console.log(`   💰 ADP: ${context.adpData.ppr} (Round ${Math.ceil(context.adpData.ppr / 12)})`);
+                    }
+                    console.log(`   🧠 Context: ${context.contextualInsights.slice(0, 2).join(', ')}...`);
+
+                    // Generate AI summary
+                    const summary = await this.generateAISummary(context);
+
+                    // Update database
+                    await this.updatePlayerSummary(player.sleeper_id, summary);
+
+                    successful++;
+                    console.log(`✅ Successfully updated ${player.name}`);
+
+                    // Rate limiting: 1 second between calls
+                    if (processed < playersToProcess.length) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+
+                } catch (error: any) {
+                    failed++;
+                    console.error(`❌ Failed to process ${player.name}:`, error.message);
+                }
+            }
+
+            console.log('\n📊 Top 500 Enhanced Summary Generation Complete!');
+            console.log(`✅ Successful: ${successful}`);
+            console.log(`❌ Failed: ${failed}`);
+            console.log(`📝 Total Processed: ${processed}`);
+            console.log(`🎯 Focused on top ${top500Names.length} ADP players`);
+
+        } catch (error: any) {
+            console.error('💥 Critical error:', error.message);
+            process.exit(1);
+        }
+    }
+
+    private async updatePlayerSummary(sleeperId: string, summary: string): Promise<void> {
+        const { error } = await supabase
+            .from('players')
+            .update({
+                summary_2025: summary,
+                summary_updated_at: new Date().toISOString(),
+                summary_type: 'enhanced',
+                summary_week: null,
+            })
+            .eq('sleeper_id', sleeperId);
+
+        if (error) {
+            throw new Error(`Failed to update player ${sleeperId}: ${error.message}`);
+        }
+    }
+
+    private normalizePlayerName(name: string): string {
+        return name
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+            .replace(/\s+/g, ' ')        // Normalize spaces
+            .trim();
+    }
+
+    /**
+     * Get team change context for players who switched teams
+     */
+    private getTeamChangeContext(playerName: string, currentTeam: string, position: string): string {
+        // Known 2025 team changes that affect context
+        const teamChanges: Record<string, { from: string; to: string; impact: string }> = {
+            'Najee Harris': { from: 'PIT', to: 'LAC', impact: ' but now with LAC competing with rookie Omarion Hampton' },
+            'Calvin Ridley': { from: 'TEN', to: 'JAX', impact: ' but reunited with proven QB in Jacksonville' },
+            'T.J. Hockenson': { from: 'MIN', to: 'MIN', impact: ' returning from injury as TE1' },
+            'Saquon Barkley': { from: 'NYG', to: 'PHI', impact: ' in explosive Eagles offense' },
+            // Add more known team changes
+        };
+
+        const change = teamChanges[playerName];
+        if (change && change.to === currentTeam) {
+            return change.impact;
+        }
+
+        // Check for injury return context
+        if (playerName.includes('Hockenson')) {
+            return ' returning from 2024 injury';
+        }
+
+        return '';
+    }
+
+    /**
+     * Get veteran player context based on situation and expert analysis
+     */
+    private getVeteranContext(player: Player, stats?: PlayerStats, expertAnalysis?: string): string | null {
+        // Analyze expert analysis for key context clues
+        if (expertAnalysis) {
+            const analysis = expertAnalysis.toLowerCase();
+
+            if (analysis.includes('injury') || analysis.includes('injured')) {
+                return 'veteran returning from injury concerns';
+            }
+            if (analysis.includes('new team') || analysis.includes('signed with')) {
+                return 'veteran in new system/team';
+            }
+            if (analysis.includes('competition') || analysis.includes('threat')) {
+                return 'veteran facing increased competition';
+            }
+            if (analysis.includes('decline') || analysis.includes('aging')) {
+                return 'veteran showing signs of decline';
+            }
+            if (analysis.includes('proven') || analysis.includes('consistent')) {
+                return 'proven veteran producer';
+            }
+        }
+
+        // Fallback to stats-based analysis
+        if (stats && stats.fantasy_points) {
+            if (stats.fantasy_points > 250) {
+                return 'established high-end producer';
+            } else if (stats.fantasy_points > 150) {
+                return 'solid veteran contributor';
+            } else {
+                return 'veteran seeking bounce-back season';
+            }
+        }
+
+        return 'veteran player with established role';
+    }
+
+    /**
+     * Extract key insights from expert analysis
+     */
+    private extractExpertInsights(expertAnalysis: string, player: Player): string[] {
+        const insights: string[] = [];
+        const analysis = expertAnalysis.toLowerCase();
+
+        // Look for specific situation keywords
+        if (analysis.includes('breakout') || analysis.includes('emerge')) {
+            insights.push('breakout candidate per experts');
+        }
+        if (analysis.includes('bust') || analysis.includes('avoid')) {
+            insights.push('expert concerns about value');
+        }
+        if (analysis.includes('sleeper') || analysis.includes('undervalued')) {
+            insights.push('potential sleeper value');
+        }
+        if (analysis.includes('target share') || analysis.includes('volume')) {
+            insights.push('volume/opportunity questions');
+        }
+
+        return insights.slice(0, 2); // Limit to 2 expert insights
+    }
 }
 
 // Run the FULL AI test
 const generator = new EnhancedPlayerSummaryGenerator();
-await generator.testFullAISummaries();
+const forceRegenerate = process.argv.includes('--force');
+await generator.generateTop500EnhancedSummaries(forceRegenerate); // TOP 500 MODE

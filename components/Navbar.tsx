@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { toast } from 'react-hot-toast';
 import { ChevronDown, Menu, X, User } from 'lucide-react';
 
 interface NavDropdownProps {
@@ -78,7 +77,6 @@ export default function Navbar() {
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        toast.success('Logged out successfully!');
         router.push('/auth/login');
     };
 

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "react-hot-toast";
 import PersistentFieldBackground from "@/components/PersistentFieldBackground";
 import ConditionalLayout from "@/components/ConditionalLayout";
 
@@ -32,7 +31,6 @@ export default function RootLayout({
         <ConditionalLayout>
           {children}
         </ConditionalLayout>
-        <Toaster />
       </body>
     </html>
   );

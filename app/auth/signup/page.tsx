@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "react-hot-toast";
 import Link from "next/link";
 import FootballFieldBackground from '@/components/FootballFieldBackground';
 
@@ -28,13 +27,12 @@ export default function SignupPage() {
       });
 
       if (error) {
-        toast.error(error.message);
+        // no toast
       } else {
-        toast.success("Account created successfully! Please check your email to verify your account.");
         router.push("/auth/login");
       }
     } catch (error) {
-      toast.error("An error occurred during signup");
+      // no toast
     } finally {
       setLoading(false);
     }

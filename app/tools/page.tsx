@@ -104,7 +104,8 @@ export default async function ToolsPage() {
                             title="draft assistant"
                             description="Live draft helper with tier-based rankings, ADP analysis, and positional scarcity alerts."
                             icon={<Target size={20} />}
-                            status="coming-soon"
+                            status="active"
+                            href="/tools/draft"
                         />
                     </div>
                 </section>

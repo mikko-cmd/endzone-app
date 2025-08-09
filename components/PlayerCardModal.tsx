@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getPlayerById } from '@/lib/sleeper/fetchAllPlayers';
 import LoadingArc from './LoadingArc';
 import { getStatColorClass, getStatStyle } from '@/lib/performanceColors';
+import { useFetch } from '@/hooks/useFetch';
 
 interface PlayerCardModalProps {
   playerId: string;
@@ -835,6 +836,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
   const [outlook, setOutlook] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [playerNews, setPlayerNews] = useState<any>(null);
 
   useEffect(() => {
     const fetchPlayerData = async () => {
@@ -942,6 +944,25 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
           console.warn(`⚠️ Failed to fetch game log for ${playerData.full_name}:`, gameLogError);
         }
 
+        // Fetch player news
+        try {
+          console.log(`📰 Fetching news for ${playerData.full_name}...`);
+          const newsRes = await fetch(`/api/player-news/${playerId}`);
+
+          if (newsRes.ok) {
+            const newsData = await newsRes.json();
+            setPlayerNews(newsData);
+            console.log('📰 Player news', { playerId, count: newsData.count, lastUpdated: newsData.lastUpdated });
+            console.log(`✅ Loaded ${newsData.count} news articles for ${playerData.full_name}`);
+          } else {
+            console.warn(`⚠️ Failed to fetch news for ${playerData.full_name}`);
+            setPlayerNews({ news: [], count: 0 });
+          }
+        } catch (error) {
+          console.error('❌ Error fetching player news:', error);
+          setPlayerNews({ news: [], count: 0 });
+        }
+
       } catch (error) {
         console.error('❌ Error in fetchPlayerData:', error);
         setError('Failed to load player data.');
@@ -1044,9 +1065,56 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
                 </TabsContent>
 
                 <TabsContent value="news" className="flex-1 overflow-y-auto mt-4">
-                  <p className="text-sm text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                    Recent news from Rotowire or other sources will appear here.
-                  </p>
+                  <div className="text-sm text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+                    <h3 className="font-semibold mb-1">Recent News</h3>
+                    {playerNews?.lastUpdated && (
+                      <p className="text-xs text-gray-400 mb-3">
+                        Last updated: {new Date(playerNews.lastUpdated).toLocaleString()}
+                      </p>
+                    )}
+
+                    {loading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <LoadingArc />
+                        <span className="ml-2">Loading news...</span>
+                      </div>
+                    ) : playerNews?.news?.length > 0 ? (
+                      <>
+                        <p className="text-xs text-gray-400 mb-4">
+                          {playerNews.count} recent articles found
+                        </p>
+                        {playerNews.news.map((newsItem: any) => (
+                          <div key={newsItem.id} className="border-b border-gray-700 pb-3 mb-3 last:border-b-0">
+                            <h4 className="font-semibold text-sm text-white leading-tight">
+                              {newsItem.headline}
+                            </h4>
+                            <p className="text-xs text-gray-300 mt-2 leading-relaxed">
+                              {newsItem.description}
+                            </p>
+                            <div className="flex items-center justify-between mt-3">
+                              <p className="text-xs text-gray-500">
+                                {new Date(newsItem.published_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })} • ESPN
+                              </p>
+                              {typeof newsItem.relevance_score === 'number' && (
+                                <span className="text-xs text-blue-400">
+                                  Relevance: {newsItem.relevance_score}/10
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div className="text-center py-8 text-gray-400">
+                        <p>No recent news found for this player.</p>
+                        <p className="text-xs mt-2">News updates daily from ESPN.</p>
+                      </div>
+                    )}
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="ai" className="flex-1 overflow-y-auto mt-4">
