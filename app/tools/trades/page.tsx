@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Users, Settings, TrendingUp, AlertCircle, Loader2, Target } from 'lucide-react';
+import { ChevronLeft, Users, TrendingUp, AlertCircle, Loader2, Target } from 'lucide-react';
 
 interface League {
   id: string;
@@ -60,7 +60,6 @@ export default function TradeFinderPage() {
     max_results: 10,
     focus_team: undefined
   });
-  const [showSettings, setShowSettings] = useState(false);
   const [loading, setLoading] = useState(false);
   const [trades, setTrades] = useState<TradeProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -163,24 +162,14 @@ export default function TradeFinderPage() {
         </Link>
 
         <header className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <Users size={32} />
-              <h1
-                className="text-3xl sm:text-4xl font-normal"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                [trade finder]
-              </h1>
-            </div>
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors"
+          <div className="flex items-center space-x-3 mb-4">
+            <Users size={32} />
+            <h1
+              className="text-3xl sm:text-4xl font-normal"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
-              <Settings size={18} />
-              <span>settings</span>
-            </button>
+              [trade finder]
+            </h1>
           </div>
           <p
             className="text-gray-400 text-lg"
@@ -190,82 +179,80 @@ export default function TradeFinderPage() {
           </p>
         </header>
 
-        {/* Settings Panel */}
-        {showSettings && (
-          <div className="bg-white/5 border border-white/20 p-6 mb-6">
-            <h3
-              className="text-xl mb-4"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              [trade settings]
-            </h3>
+        {/* Settings Panel - Now Always Visible */}
+        <div className="bg-white/5 border border-white/20 p-6 mb-6">
+          <h3
+            className="text-xl mb-4"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            [trade settings]
+          </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label
-                  className="block text-sm mb-2"
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  fairness threshold
-                </label>
-                <select
-                  value={settings.min_fairness}
-                  onChange={(e) => setSettings({ ...settings, min_fairness: parseFloat(e.target.value) })}
-                  className="w-full bg-black border border-white/20 px-3 py-2 text-white"
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  <option value={0.2}>very loose (20%)</option>
-                  <option value={0.3}>loose (30%)</option>
-                  <option value={0.4}>relaxed (40%)</option>
-                  <option value={0.5}>balanced (50%)</option>
-                  <option value={0.6}>fair (60%)</option>
-                  <option value={0.7}>strict (70%)</option>
-                  <option value={0.8}>very strict (80%)</option>
-                </select>
-                <p className="text-xs text-gray-400 mt-1">lower = more trade options</p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label
+                className="block text-sm mb-2"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                fairness threshold
+              </label>
+              <select
+                value={settings.min_fairness}
+                onChange={(e) => setSettings({ ...settings, min_fairness: parseFloat(e.target.value) })}
+                className="w-full bg-black border border-white/20 px-3 py-2 text-white"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                <option value={0.2}>very loose (20%)</option>
+                <option value={0.3}>loose (30%)</option>
+                <option value={0.4}>relaxed (40%)</option>
+                <option value={0.5}>balanced (50%)</option>
+                <option value={0.6}>fair (60%)</option>
+                <option value={0.7}>strict (70%)</option>
+                <option value={0.8}>very strict (80%)</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">lower = more trade options</p>
+            </div>
 
-              <div>
-                <label
-                  className="block text-sm mb-2"
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  max results
-                </label>
-                <select
-                  value={settings.max_results}
-                  onChange={(e) => setSettings({ ...settings, max_results: parseInt(e.target.value) })}
-                  className="w-full bg-black border border-white/20 px-3 py-2 text-white"
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  <option value={5}>5 trades</option>
-                  <option value={10}>10 trades</option>
-                  <option value={15}>15 trades</option>
-                  <option value={20}>20 trades</option>
-                </select>
-              </div>
+            <div>
+              <label
+                className="block text-sm mb-2"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                max results
+              </label>
+              <select
+                value={settings.max_results}
+                onChange={(e) => setSettings({ ...settings, max_results: parseInt(e.target.value) })}
+                className="w-full bg-black border border-white/20 px-3 py-2 text-white"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                <option value={5}>5 trades</option>
+                <option value={10}>10 trades</option>
+                <option value={15}>15 trades</option>
+                <option value={20}>20 trades</option>
+              </select>
+            </div>
 
-              <div>
-                <label
-                  className="block text-sm mb-2"
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  focus team (optional)
-                </label>
-                <select
-                  value={settings.focus_team || ''}
-                  onChange={(e) => setSettings({ ...settings, focus_team: e.target.value || undefined })}
-                  className="w-full bg-black border border-white/20 px-3 py-2 text-white"
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  <option value="">all teams</option>
-                  {/* Will populate with team names once league is selected */}
-                </select>
-                <p className="text-xs text-gray-400 mt-1">trades involving this team</p>
-              </div>
+            <div>
+              <label
+                className="block text-sm mb-2"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                focus team (optional)
+              </label>
+              <select
+                value={settings.focus_team || ''}
+                onChange={(e) => setSettings({ ...settings, focus_team: e.target.value || undefined })}
+                className="w-full bg-black border border-white/20 px-3 py-2 text-white"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                <option value="">all teams</option>
+                {/* Will populate with team names once league is selected */}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">trades involving this team</p>
             </div>
           </div>
-        )}
+        </div>
 
         {/* League Selection */}
         <div className="bg-white/5 border border-white/20 p-6 mb-6">

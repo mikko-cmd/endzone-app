@@ -9,6 +9,7 @@ interface DraftPick {
     player?: string;
     position?: string;
     team?: string;
+    sleeper_id?: string; // Add this line
 }
 
 interface Player {
@@ -25,10 +26,35 @@ interface SnakeDraftBoardProps {
     leagueSize: number;
     rounds: number;
     picks: DraftPick[];
+    userTeamPosition?: number | null; // Allow null
     onManualAssign?: (pickNumber: number, player: Player) => void;
     onRemovePlayer?: (pickNumber: number) => void;
     onViewPlayer?: (player: DraftPick) => void;
+    onClaimTeam?: (teamNumber: number) => void;
+    isDrafting?: boolean; // New prop to track if draft has started
+    mode?: 'mock' | 'live'; // Add this line
+    teamNames?: Record<number, string>; // Add this line
 }
+
+// Utility function for position-based colors
+const getPositionColor = (position: string): string => {
+    switch (position) {
+        case 'QB':
+            return 'text-red-400'; // Red for QBs
+        case 'RB':
+            return 'text-green-400'; // Green for RBs
+        case 'WR':
+            return 'text-blue-400'; // Blue for WRs
+        case 'TE':
+            return 'text-yellow-400'; // Yellow for TEs
+        case 'K':
+            return 'text-purple-400'; // Purple for Kickers
+        case 'DST':
+            return 'text-orange-400'; // Orange for Defense
+        default:
+            return 'text-white'; // Default white for unknown positions
+    }
+};
 
 interface CellAction {
     pickNumber: number;
@@ -56,9 +82,14 @@ export default function SnakeDraftBoard({
     leagueSize,
     rounds,
     picks,
+    userTeamPosition,
     onManualAssign,
     onRemovePlayer,
-    onViewPlayer
+    onViewPlayer,
+    onClaimTeam,
+    isDrafting = false,
+    mode = 'mock',
+    teamNames = {} // Add this line
 }: SnakeDraftBoardProps) {
     const [hoveredCell, setHoveredCell] = useState<string | null>(null);
     const [activeCell, setActiveCell] = useState<CellAction | null>(null);
@@ -197,14 +228,63 @@ export default function SnakeDraftBoard({
 
     return (
         <div className="w-full relative">
+            {/* Claim Buttons - Hidden when drafting or in live mode */}
+            {!isDrafting && mode === 'mock' && (
+                <div className="grid mb-1"
+                    style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>
+                    {Array.from({ length: leagueSize }, (_, i) => {
+                        const teamNumber = i + 1;
+                        const isUserTeam = userTeamPosition === teamNumber;
+                        return (
+                            <div key={i} className="flex justify-center">
+                                {!isUserTeam && onClaimTeam && (
+                                    <button
+                                        onClick={() => onClaimTeam(teamNumber)}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-xs font-mono border border-blue-500"
+                                    >
+                                        CLAIM
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
             {/* Team Headers */}
             <div className="grid border-b border-white/20 mb-2"
                 style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>
-                {Array.from({ length: leagueSize }, (_, i) => (
-                    <div key={i} className="p-2 text-center bg-gray-900 border border-white/10">
-                        <span className="font-mono text-sm text-gray-300">Team {i + 1}</span>
-                    </div>
-                ))}
+                {Array.from({ length: leagueSize }, (_, i) => {
+                    const teamNumber = i + 1;
+                    const isUserTeam = userTeamPosition === teamNumber;
+
+                    // Determine team display name based on mode and available data
+                    let teamDisplayName: string;
+
+                    if (mode === 'live') {
+                        // In live mode: use Sleeper team name if available, otherwise "Team X"
+                        if (teamNames[teamNumber]) {
+                            teamDisplayName = teamNames[teamNumber];
+                        } else {
+                            teamDisplayName = `Team ${teamNumber}`;
+                        }
+                        // Only show "ME" indicator if we know which team is the user's
+                        if (isUserTeam && userTeamPosition !== null) {
+                            teamDisplayName = `${teamDisplayName} (ME)`;
+                        }
+                    } else {
+                        // In mock mode: use "ME" for user team, "Team X" for others
+                        teamDisplayName = isUserTeam ? 'ME' : `Team ${teamNumber}`;
+                    }
+
+                    return (
+                        <div key={i} className={`p-2 text-center bg-black border ${isUserTeam ? 'border-white' : 'border-white/10'}`}>
+                            <span className={`font-mono text-sm ${isUserTeam ? 'text-white font-bold' : 'text-gray-300'}`}>
+                                {teamDisplayName}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Draft Grid */}
@@ -225,13 +305,15 @@ export default function SnakeDraftBoard({
                                 const cellKey = `${roundIndex}-${teamPosition}`;
                                 const isHovered = hoveredCell === cellKey;
                                 const isActive = activeCell?.pickNumber === pickNumber;
+                                const isUserTeamCell = userTeamPosition === teamPosition;
 
                                 return (
                                     <div
                                         key={cellKey}
                                         className={`
-                      relative border border-white/15 p-2 min-h-[60px] 
+                      relative p-2 min-h-[60px] 
                       transition-all duration-200 cursor-pointer
+                      ${isUserTeamCell ? 'border-2 border-white' : 'border border-white/15'}
                       ${isCurrentPick ? 'ring-2 ring-blue-400 bg-blue-950/20' : ''}
                       ${isActive ? 'ring-2 ring-yellow-400 bg-yellow-950/20' : ''}
                       ${isHovered && !isActive ? 'bg-gray-800/50' : 'bg-black'}
@@ -250,10 +332,10 @@ export default function SnakeDraftBoard({
                                         <div className="mt-3">
                                             {pick?.player ? (
                                                 <div>
-                                                    <div className="font-mono text-sm text-white truncate">
+                                                    <div className={`font-mono text-sm truncate ${getPositionColor(pick.position || '')}`}>
                                                         {pick.player}
                                                     </div>
-                                                    <div className="font-mono text-xs text-gray-400">
+                                                    <div className={`font-mono text-xs ${getPositionColor(pick.position || '')}`}>
                                                         {pick.position} • {pick.team}
                                                     </div>
                                                 </div>
@@ -342,10 +424,10 @@ export default function SnakeDraftBoard({
                                                         onClick={() => handleManualAssign(player)}
                                                         className="w-full p-2 text-left hover:bg-gray-800 transition-colors"
                                                     >
-                                                        <div className="font-mono text-xs text-white">
+                                                        <div className={`font-mono text-xs ${getPositionColor(player.position)}`}>
                                                             {player.name}
                                                         </div>
-                                                        <div className="font-mono text-xs text-gray-400">
+                                                        <div className={`font-mono text-xs ${getPositionColor(player.position)}`}>
                                                             {player.position} • {player.team}
                                                             {player.adp && ` • ADP ${player.adp.toFixed(1)}`}
                                                         </div>

@@ -63,11 +63,31 @@ export default function PlayerList({ onSelectPlayer, excludePlayerNames = [] }: 
         }
     }, [searchQuery, allPlayers]);
 
-    // Filter by position and exclude drafted players
+    // Enhanced filtering to handle name variations
     useEffect(() => {
-        let filtered = players.filter(player =>
-            !excludePlayerNames.includes(player.name)
-        );
+        let filtered = players.filter(player => {
+            // Check exact name match first
+            if (excludePlayerNames.includes(player.name)) {
+                return false;
+            }
+            
+            // Check for partial matches to handle name variations
+            // e.g., "Kenneth Walker III" vs "Kenneth Walker"
+            const playerNameLower = player.name.toLowerCase();
+            const isExcluded = excludePlayerNames.some(excludedName => {
+                const excludedNameLower = excludedName.toLowerCase();
+                
+                // Check if names match when removing suffixes (Jr, Sr, III, etc.)
+                const cleanPlayerName = playerNameLower.replace(/\s+(jr|sr|iii|ii|iv|v)\.?\s*$/i, '').trim();
+                const cleanExcludedName = excludedNameLower.replace(/\s+(jr|sr|iii|ii|iv|v)\.?\s*$/i, '').trim();
+                
+                return cleanPlayerName === cleanExcludedName ||
+                       playerNameLower.includes(excludedNameLower) ||
+                       excludedNameLower.includes(playerNameLower);
+            });
+            
+            return !isExcluded;
+        });
 
         if (selectedPosition !== 'ALL') {
             filtered = filtered.filter(player => player.position === selectedPosition);

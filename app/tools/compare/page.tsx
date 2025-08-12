@@ -42,14 +42,18 @@ interface DefensiveStats {
     scorePct: number;
     turnoverPct: number;
     exp: number;
+    // ADD THESE MISSING FIELDS:
+    passCompletionsAllowed: number;
+    passAttemptsAllowed: number;
+    rushAttemptsFaced: number;
 }
 
 interface DefensiveMatchupDetail {
-    player: string;
+    player: string;        // But API returns playerName
     team: string;
     opponent?: string;
     defenseRank?: number;
-    home?: boolean;
+    home?: boolean;        // But API returns isHome
     matchupScore?: number;
     defenseStats?: DefensiveStats;
 }

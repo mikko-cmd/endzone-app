@@ -11,6 +11,8 @@ interface League {
   created_at: string;
   last_synced_at: string | null;
   rosters_json: any | null;
+  platform?: string; // Add this
+  is_manual?: boolean; // Add this
 }
 
 export default async function LeaguesPage() {
@@ -97,6 +99,12 @@ export default async function LeaguesPage() {
                         <p className="text-sm text-gray-400">
                           team: {league.rosters_json.username}
                         </p>
+                      )}
+                      <p className="text-sm text-gray-400">
+                        platform: {league.platform || 'Sleeper'}
+                      </p>
+                      {league.is_manual && (
+                        <p className="text-xs text-yellow-400">manual entry</p>
                       )}
                     </div>
                     <ChevronRight size={20} className="text-gray-600 group-hover:text-white transition-colors" />

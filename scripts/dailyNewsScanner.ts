@@ -78,7 +78,7 @@ class DailyNewsScanner {
     }
 
     /**
-     * Match article headlines/descriptions to player names
+     * Match articles to players with improved relevance scoring
      */
     matchArticlesToPlayers(articles: ESPNArticle[], players: any[]): PlayerNewsMatch[] {
         console.log(`🔍 Matching articles to players...`);
@@ -91,39 +91,128 @@ class DailyNewsScanner {
                 .replace(/\s+/g, ' ')
                 .trim();
 
+        // Team name mapping for better matching
+        const teamMap: Record<string, string[]> = {
+            'ATL': ['falcons', 'atlanta'],
+            'BAL': ['ravens', 'baltimore'],
+            'BUF': ['bills', 'buffalo'],
+            'CAR': ['panthers', 'carolina'],
+            'CHI': ['bears', 'chicago'],
+            'CIN': ['bengals', 'cincinnati'],
+            'CLE': ['browns', 'cleveland'],
+            'DAL': ['cowboys', 'dallas'],
+            'DEN': ['broncos', 'denver'],
+            'DET': ['lions', 'detroit'],
+            'GB': ['packers', 'green bay'],
+            'HOU': ['texans', 'houston'],
+            'IND': ['colts', 'indianapolis'],
+            'JAX': ['jaguars', 'jacksonville'],
+            'KC': ['chiefs', 'kansas city'],
+            'LV': ['raiders', 'las vegas'],
+            'LAC': ['chargers', 'los angeles'],
+            'LAR': ['rams', 'los angeles'],
+            'MIA': ['dolphins', 'miami'],
+            'MIN': ['vikings', 'minnesota'],
+            'NE': ['patriots', 'new england'],
+            'NO': ['saints', 'new orleans'],
+            'NYG': ['giants', 'new york'],
+            'NYJ': ['jets', 'new york'],
+            'PHI': ['eagles', 'philadelphia'],
+            'PIT': ['steelers', 'pittsburgh'],
+            'SF': ['49ers', 'san francisco'],
+            'SEA': ['seahawks', 'seattle'],
+            'TB': ['buccaneers', 'tampa bay'],
+            'TEN': ['titans', 'tennessee'],
+            'WAS': ['commanders', 'washington'],
+        };
+
         for (const article of articles) {
             const searchText = normalize(`${article.headline} ${article.description}`);
+            const headline = normalize(article.headline);
+            const description = normalize(article.description);
+
+            // Track all potential matches with their scores
+            const potentialMatches: { player: any; score: number }[] = [];
 
             for (const player of players) {
-                const full = normalize(player.name);          // e.g., "aj brown"
-                const [first, last = ''] = full.split(' ');   // "aj", "brown"
+                const full = normalize(player.name);
+                const parts = full.split(' ');
+                const first = parts[0];
+                const last = parts[parts.length - 1];
                 const teamNorm = normalize(player.team);
+                const teamVariants = teamMap[player.team] || [];
 
                 let relevanceScore = 0;
 
-                if (searchText.includes(full)) {
-                    relevanceScore = 10;
-                } else if (last && searchText.includes(last) && searchText.includes(first[0])) {
-                    relevanceScore = 8;
-                } else if (last && searchText.includes(last)) {
-                    relevanceScore = last.length > 4 ? 6 : 3;
-                } else if (searchText.includes(first) && teamNorm && searchText.includes(teamNorm)) {
-                    relevanceScore = 5;
+                // HEADLINE SCORING (much higher weight)
+                if (headline.includes(full)) {
+                    relevanceScore += 25; // Full name in headline = primary subject
+                } else if (last && headline.includes(last) && headline.includes(first[0])) {
+                    relevanceScore += 20; // "J. Smith" format in headline
+                } else if (last && last.length > 4 && headline.includes(last)) {
+                    relevanceScore += 15; // Last name only in headline (if unique enough)
                 }
 
+                // DESCRIPTION SCORING (medium weight)
+                if (description.includes(full)) {
+                    relevanceScore += 10; // Full name in description
+                } else if (last && description.includes(last) && description.includes(first[0])) {
+                    relevanceScore += 8; // "J. Smith" format in description
+                } else if (last && last.length > 4 && description.includes(last)) {
+                    relevanceScore += 5; // Last name only in description
+                }
+
+                // CONTEXT SCORING (confirms relevance)
                 if (player.position && searchText.includes(normalize(player.position))) {
-                    relevanceScore += 1;
+                    relevanceScore += 2; // Position mentioned
                 }
 
-                if (relevanceScore >= 6) {
+                if (teamNorm && (searchText.includes(teamNorm) || teamVariants.some(variant => searchText.includes(variant)))) {
+                    relevanceScore += 2; // Team mentioned
+                }
+
+                // PROXIMITY SCORING (name near key contextual words)
+                const contextWords = ['traded', 'signed', 'injured', 'touchdown', 'yards', 'catch', 'rush', 'passing'];
+                for (const word of contextWords) {
+                    if (searchText.includes(word) && searchText.includes(last)) {
+                        const nameIndex = searchText.indexOf(last);
+                        const wordIndex = searchText.indexOf(word);
+                        const distance = Math.abs(nameIndex - wordIndex);
+                        if (distance < 50) { // Within 50 characters
+                            relevanceScore += 1;
+                        }
+                    }
+                }
+
+                if (relevanceScore > 0) {
+                    potentialMatches.push({ player, score: relevanceScore });
+                }
+            }
+
+            // Sort by relevance and only take articles where someone has a strong score
+            potentialMatches.sort((a, b) => b.score - a.score);
+
+            // Only include if:
+            // 1. Top scorer has at least 12 points (strong relevance)
+            // 2. OR top scorer has 8+ and is significantly higher than second place
+            if (potentialMatches.length > 0) {
+                const topMatch = potentialMatches[0];
+                const secondMatch = potentialMatches[1];
+
+                const shouldInclude =
+                    topMatch.score >= 12 ||
+                    (topMatch.score >= 8 && (!secondMatch || topMatch.score >= secondMatch.score * 1.5));
+
+                if (shouldInclude) {
+                    // Only include the top match to avoid duplicate irrelevant entries
                     matches.push({
-                        playerId: player.sleeper_id,
-                        playerName: player.name,
+                        playerId: topMatch.player.sleeper_id,
+                        playerName: topMatch.player.name,
                         articleId: article.id,
                         headline: article.headline,
                         description: article.description,
                         published: article.published,
-                        relevanceScore,
+                        relevanceScore: topMatch.score,
                     });
                 }
             }

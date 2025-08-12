@@ -11,7 +11,10 @@
     "restart": "npm run clean && npm install && npm run dev",
     "fix-windows": "tsx scripts/fixWindowsCache.ts",
     "news-scan": "tsx scripts/dailyNewsScanner.ts",
-    "news-scan-test": "tsx scripts/dailyNewsScanner.ts --limit=20"
+    "news-scan-test": "tsx scripts/dailyNewsScanner.ts --limit=20",
+    "test-player-projections": "tsx scripts/testPlayerProjections.ts",
+    "test:draft-data": "tsx scripts/testDraftData.ts",
+    "test:draft-api": "tsx scripts/testDraftAPI.ts"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.0",

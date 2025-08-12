@@ -60,10 +60,19 @@ const NavDropdown = ({ title, items, isOpen, onToggle }: NavDropdownProps) => {
     );
 };
 
+// Add leagues state and interface
+interface League {
+    id: string;
+    league_name: string;
+    sleeper_league_id: string;
+}
+
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [userLeagues, setUserLeagues] = useState<League[]>([]);
+    const [leaguesLoading, setLeaguesLoading] = useState(true);
     const router = useRouter();
     const supabase = createClient();
 
@@ -74,6 +83,28 @@ export default function Navbar() {
         };
         getUser();
     }, [supabase]);
+
+    // Add new useEffect to fetch leagues
+    useEffect(() => {
+        const fetchUserLeagues = async () => {
+            if (!userEmail) return;
+
+            try {
+                const response = await fetch(`/api/leagues/get?user_email=${encodeURIComponent(userEmail)}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    setUserLeagues(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch user leagues:', error);
+            } finally {
+                setLeaguesLoading(false);
+            }
+        };
+
+        fetchUserLeagues();
+    }, [userEmail]);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -88,6 +119,29 @@ export default function Navbar() {
         setOpenDropdown(null);
     };
 
+    // Modify navItems to dynamically generate My Leagues items
+    const getMyLeaguesItems = () => {
+        const items = [];
+
+        // Add individual leagues
+        userLeagues.forEach(league => {
+            items.push({
+                label: league.league_name,
+                href: `/league/${league.sleeper_league_id}`
+            });
+        });
+
+        // Add separator and static options
+        if (userLeagues.length > 0) {
+            items.push({ label: '───────────', href: '#', disabled: true });
+        }
+
+        items.push({ label: 'View All Leagues', href: '/leagues' });
+        items.push({ label: 'Add/Connect League', href: '/leagues/connect' });
+
+        return items;
+    };
+
     const navItems = [
         {
             title: 'Home',
@@ -98,10 +152,7 @@ export default function Navbar() {
         },
         {
             title: 'My Leagues',
-            items: [
-                { label: 'View All Leagues', href: '/leagues' },
-                { label: 'Add/Connect League', href: '/leagues/connect' },
-            ]
+            items: getMyLeaguesItems()
         },
         {
             title: 'AI Tools',
