@@ -19,11 +19,11 @@ export async function GET() {
             output: stdout
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Daily news scan failed:', error);
         return NextResponse.json({
             success: false,
-            error: error.message
+            error: error.message || 'Unknown error occurred'
         }, { status: 500 });
     }
 }

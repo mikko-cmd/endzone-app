@@ -25,7 +25,7 @@ export async function GET(
 
         return NextResponse.json({ players });
 
-    } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: any) {
+        return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
     }
 }

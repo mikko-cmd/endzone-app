@@ -62,7 +62,11 @@ export async function GET() {
 
         return NextResponse.json({ playersWithNews });
 
-    } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: any) {
+        console.error('[Enhanced Trade] Error:', error);
+        return NextResponse.json({
+            error: 'Failed to generate enhanced trade suggestions',
+            details: error.message || 'Unknown error'
+        }, { status: 500 });
     }
 }
