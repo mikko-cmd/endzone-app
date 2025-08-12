@@ -720,7 +720,7 @@ export default function DraftAssistant() {
                 }
 
                 setLoadingPlayers(false);
-            } catch (error) {
+            } catch (error: any) {
                 error('Failed to load players:', error);
                 // Fallback with mock data
                 const mockPlayers: Player[] = [
@@ -956,7 +956,7 @@ export default function DraftAssistant() {
                 const data = await response.json();
                 setSuggestions(data.suggestions || null);
             }
-        } catch (error) {
+        } catch (error: any) {
             error('Failed to fetch suggestions:', error);
         } finally {
             setLoadingSuggestions(false);
@@ -1048,7 +1048,7 @@ export default function DraftAssistant() {
                     // and matching it to a roster in the league
                     // For now, user will need to manually identify their team in live mode
 
-                } catch (error) {
+                } catch (error: any) {
                     error('Failed to fetch team names:', error);
                 }
             } else {

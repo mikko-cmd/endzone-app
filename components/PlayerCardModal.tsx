@@ -958,12 +958,12 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
             console.warn(`⚠️ Failed to fetch news for ${playerData.full_name}`);
             setPlayerNews({ news: [], count: 0 });
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('❌ Error fetching player news:', error);
           setPlayerNews({ news: [], count: 0 });
         }
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Error in fetchPlayerData:', error);
         setError('Failed to load player data.');
       } finally {
