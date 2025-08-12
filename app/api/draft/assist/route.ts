@@ -91,8 +91,14 @@ export async function POST(request: Request) {
 
         console.log(`👥 Players: ${allPlayers.length} total, ${available.length} available`);
 
+        // Create complete draft state with available players
+        const draftState: DraftState = {
+            ...draft,
+            available
+        };
+
         // 2. Calculate heuristics for available players
-        const scarcity = DraftHeuristics.estimateScarcity(draft, available, league);
+        const scarcity = DraftHeuristics.estimateScarcity(draftState, available, league);
         console.log('🔍 Scarcity analysis:', scarcity);
 
         // 3. Enrich available players with draft context
