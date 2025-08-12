@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import ComparisonResults from '@/components/ComparisonResults';
 
 interface Player {
     sleeper_id: string;
