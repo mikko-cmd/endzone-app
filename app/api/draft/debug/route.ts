@@ -107,11 +107,11 @@ export async function POST(request: Request) {
             const value = DraftHeuristics.scoreValue(player, draft.pickOverall, league.format);
             const stack = DraftHeuristics.analyzeStacks({
                 ...myTeam,
-                stacks: myTeam.stacks || []
+                stacks: (myTeam.stacks || []) as any
             }, player);
             const byeImpact = DraftHeuristics.calculateByeImpact({
                 ...myTeam,
-                stacks: myTeam.stacks || []
+                stacks: (myTeam.stacks || []) as any
             }, player);
 
             return {
