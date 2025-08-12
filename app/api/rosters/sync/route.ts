@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       } else {
         console.warn('[RosterSync] Failed to fetch additional data, continuing with basic data');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn('[RosterSync] Timeout or error fetching additional data, continuing with basic data:', error);
     }
 

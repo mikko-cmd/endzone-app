@@ -178,7 +178,7 @@ TONE: Knowledgeable, realistic, specific`;
             const response = await openai.chat.completions.create(promptData);
 
             return response.choices[0]?.message?.content || 'Summary generation failed';
-        } catch (error) {
+        } catch (error: any) {
             console.error(`Error generating AI summary:`, error);
             return `Enhanced summary unavailable. Please try again later.`;
         }
@@ -273,7 +273,7 @@ export async function GET(request: Request) {
             }
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Enhanced summary API error:', error);
         return NextResponse.json({
             error: 'Failed to generate enhanced summary',

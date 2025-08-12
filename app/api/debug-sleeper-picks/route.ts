@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
                     ourLookupResult: playerData,
                     found: playerData.players?.length > 0
                 });
-            } catch (error) {
+            } catch (error: any) {
                 testResults.push({
                     sleeperPick: {
                         pick_no: pick.pick_no,
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
                         round: pick.round,
                         draft_slot: pick.draft_slot
                     },
-                    error: error.message,
+                    error: error.message || 'Unknown error',
                     found: false
                 });
             }
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
             draftId
         });
 
-    } catch (error) {
+    } catch (error: any) {
         return NextResponse.json({
             error: error.message,
             draftId,

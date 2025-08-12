@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
         }
 
         return NextResponse.json({ players: players || [] });
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ Player search API error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

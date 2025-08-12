@@ -62,7 +62,7 @@ export async function GET() {
             playersLoaded: players.length
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ API health check failed:', error);
         return NextResponse.json(
             {
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
             constraints
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ Draft assist failed:', error);
         return NextResponse.json(
             {

@@ -69,7 +69,7 @@ export async function GET(
 
         return NextResponse.json(result);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ API: Exception:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

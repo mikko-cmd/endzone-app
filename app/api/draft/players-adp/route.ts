@@ -50,7 +50,7 @@ async function loadADPPlayers(): Promise<ADPPlayer[]> {
                 }
             }
         });
-    } catch (error) {
+    } catch (error: any) {
         console.warn('[ADP] Could not load ADP data:', error);
     }
 
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
         players = players.slice(0, limit);
 
         return NextResponse.json({ success: true, data: players });
-    } catch (error) {
+    } catch (error: any) {
         console.error('[ADP API] Error:', error);
         return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
     }

@@ -205,7 +205,7 @@ export async function GET(request: NextRequest, { params }: { params: { leagueId
             }
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Enhanced Trade] Error:', error);
         return NextResponse.json({
             error: 'Failed to generate enhanced trade suggestions',

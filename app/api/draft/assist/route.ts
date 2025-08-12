@@ -62,7 +62,7 @@ export async function GET() {
             playersLoaded: players.length
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ API health check failed:', error);
         return NextResponse.json(
             {
@@ -174,7 +174,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json(recommendation);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ Draft assist error:', error);
 
         if (error instanceof z.ZodError) {
