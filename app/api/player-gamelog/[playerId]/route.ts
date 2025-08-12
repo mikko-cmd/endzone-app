@@ -126,7 +126,7 @@ export async function GET(
         console.log(`✅ Found ${nflverseGameLogs.length} real game logs for ${player.name}`);
 
         // Convert NFLverse data to a map for easy lookup
-        const gamesByWeek = new Map();
+        const gamesByWeek = new Map<number, any>();
         nflverseGameLogs.forEach(log => {
           gamesByWeek.set(log.week, log);
         });

@@ -307,7 +307,7 @@ async function enhanceTeamsWithProjections(
 
     // Get all player info in batch for better performance
     const allPlayerIds = rosters.flatMap(r => r.players || []);
-    const playerInfoMap = new Map();
+    const playerInfoMap = new Map<string, any>();
 
     // Fetch player info for all players
     console.log(`[Enhanced Trade] Fetching player info for ${allPlayerIds.length} players...`);

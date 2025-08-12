@@ -206,7 +206,7 @@ async function loadADPData(): Promise<Map<string, { rank: number; byeWeek?: numb
     const fs = await import('fs');
     const path = await import('path');
 
-    const adpMap = new Map();
+    const adpMap = new Map<string, { rank: number; byeWeek?: number }>();
 
     try {
         const adpFilePath = path.join(process.cwd(), 'data/adp/2025_sleeper_adp_ppr.csv');
