@@ -202,11 +202,11 @@ export async function GET(
 }
 
 // Helper functions
-async function loadADPData(): Promise<Map<string, { rank: number; byeWeek?: number }>> {
+async function loadADPData(): Promise<Map<string, { rank: number; byeWeek?: number; team?: string; position?: string }>> {
     const fs = await import('fs');
     const path = await import('path');
 
-    const adpMap = new Map<string, { rank: number; byeWeek?: number }>();
+    const adpMap = new Map<string, { rank: number; byeWeek?: number; team?: string; position?: string }>();
 
     try {
         const adpFilePath = path.join(process.cwd(), 'data/adp/2025_sleeper_adp_ppr.csv');
@@ -226,9 +226,7 @@ async function loadADPData(): Promise<Map<string, { rank: number; byeWeek?: numb
                     if (name && pprRank) {
                         adpMap.set(name, {
                             rank: parseFloat(pprRank.replace(/[^\d.]/g, '')) || (index + 1),
-                            byeWeek,
-                            team,
-                            position
+                            byeWeek
                         });
                     }
                 }
