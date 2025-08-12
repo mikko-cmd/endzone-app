@@ -126,7 +126,7 @@ export async function POST(request: Request) {
         });
 
         // 4. Filter to reasonable candidates - EXCLUDE players with invalid ADP
-        const maxReach = constraints.maxReach || 12;
+        const maxReach = (constraints as any).maxReach || 12;
         const candidates = enrichedPlayers
             .filter(p => {
                 // Exclude players with invalid/missing ADP data

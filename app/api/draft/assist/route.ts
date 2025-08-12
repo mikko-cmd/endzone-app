@@ -128,7 +128,7 @@ export async function POST(request: Request) {
         });
 
         // 4. Filter to reasonable candidates - ADP PROXIMITY based on draft stage
-        const maxReach = constraints?.maxReach || 12;
+        const maxReach = (constraints as any).maxReach || 12;
         const candidates = enrichedPlayers
             .filter(p => {
                 const adp = p.adp[league.format];
