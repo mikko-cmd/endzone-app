@@ -234,7 +234,7 @@ async function loadADPData(): Promise<Map<string, { rank: number; byeWeek?: numb
                 }
             }
         });
-    } catch (error) {
+    } catch (error: any) {
         console.warn('[WaiverWire] Could not load ADP data:', error);
     }
 

@@ -17,7 +17,7 @@ const fetchWithTimeout = async (url: string, timeoutMs: number = 10000) => {
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
     return response;
-  } catch (error) {
+  } catch (error: any) {
     clearTimeout(timeoutId);
     throw error;
   }

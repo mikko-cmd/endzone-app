@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     } catch (error: any) {
         return NextResponse.json({
-            error: error.message,
+            error: error.message || 'Unknown error',
             draftId,
             stack: error.stack
         }, { status: 500 });

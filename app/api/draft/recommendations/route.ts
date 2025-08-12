@@ -153,7 +153,7 @@ async function loadADPData(): Promise<ADPPlayer[]> {
                 }
             }
         });
-    } catch (error) {
+    } catch (error: any) {
         console.warn('[Draft] Could not load ADP data:', error);
     }
 

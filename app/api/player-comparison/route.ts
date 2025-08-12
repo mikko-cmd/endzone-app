@@ -76,7 +76,7 @@ class EnhancedPlayerComparison {
 
             if (error || !data) return null;
             return data;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Database lookup error:', error);
             return null;
         }
@@ -730,7 +730,7 @@ Write a start/sit analysis that leads with statistical evidence. Use the market 
             });
 
             return completion.choices[0].message.content || 'Analysis unavailable';
-        } catch (err) {
+        } catch (err: any) {
             console.error('OpenAI API error:', err);
             // Updated fallback with more data focus
             if (comparison.confidence >= 60) {
@@ -810,7 +810,7 @@ export async function GET(request: Request) {
 
             console.log(`✅ Generated analysis for ${players.length} players`);
 
-        } catch (analysisError) {
+        } catch (analysisError: any) {
             console.error('❌ Error generating player analysis:', analysisError);
             return NextResponse.json({
                 error: 'Failed to generate player analysis',
@@ -929,7 +929,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json(response);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('💥 Enhanced player comparison error:', error);
         return NextResponse.json({
             error: 'Failed to generate enhanced comparison',

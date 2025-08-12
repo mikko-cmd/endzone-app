@@ -273,7 +273,7 @@ async function getNFLProjections(): Promise<{ [playerId: string]: ProjectionData
         });
 
         return response.data.body.playerProjections || {};
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Enhanced Trade] Failed to load projections:', error);
         return {};
     }
@@ -287,7 +287,7 @@ async function getPlayerInfo(playerId: string): Promise<any> {
             return await response.json();
         }
         return null;
-    } catch (error) {
+    } catch (error: any) {
         console.error(`[Enhanced Trade] Failed to get player info for ${playerId}:`, error);
         return null;
     }
