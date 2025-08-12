@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { DraftDataService } from '@/lib/draftData';
 import { DraftHeuristics } from '@/lib/draftHeuristics';
 import { generateCoachRecommendation } from '@/lib/coachPrompt';
+import { DraftState } from '@/lib/types/draft';
 import { z } from 'zod';
 
 // Input validation schema
@@ -91,15 +92,27 @@ export async function POST(request: Request) {
 
         console.log(`👥 Players: ${allPlayers.length} total, ${available.length} available`);
 
+        // Create complete draft state with available players
+        const draftState: DraftState = {
+            ...draft,
+            available
+        };
+
         // 2. Calculate heuristics for available players
-        const scarcity = DraftHeuristics.estimateScarcity(draft, available, league);
+        const scarcity = DraftHeuristics.estimateScarcity(draftState, available, league);
         console.log('🔍 Scarcity analysis:', scarcity);
 
         // 3. Enrich available players with draft context
         const enrichedPlayers = available.map(player => {
             const value = DraftHeuristics.scoreValue(player, draft.pickOverall, league.format);
-            const stack = DraftHeuristics.analyzeStacks(myTeam, player);
-            const byeImpact = DraftHeuristics.calculateByeImpact(myTeam, player);
+            const stack = DraftHeuristics.analyzeStacks({
+                ...myTeam,
+                stacks: myTeam.stacks || []
+            }, player);
+            const byeImpact = DraftHeuristics.calculateByeImpact({
+                ...myTeam,
+                stacks: myTeam.stacks || []
+            }, player);
 
             return {
                 ...player,

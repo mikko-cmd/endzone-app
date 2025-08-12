@@ -105,7 +105,10 @@ export async function POST(request: Request) {
         // 3. Enrich available players with draft context
         const enrichedPlayers = available.map(player => {
             const value = DraftHeuristics.scoreValue(player, draft.pickOverall, league.format);
-            const stack = DraftHeuristics.analyzeStacks(myTeam, player);
+            const stack = DraftHeuristics.analyzeStacks({
+                ...myTeam,
+                stacks: myTeam.stacks || []
+            }, player);
             const byeImpact = DraftHeuristics.calculateByeImpact(myTeam, player);
 
             return {
