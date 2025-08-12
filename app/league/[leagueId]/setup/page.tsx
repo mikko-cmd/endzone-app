@@ -729,7 +729,7 @@ export default function ManualLeagueSetup({ params }: { params: { leagueId: stri
                                             {/* Position breakdown for clarity */}
                                             <div className="mt-4 text-xs text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
                                                 {(() => {
-                                                    const breakdown = [];
+                                                    const breakdown: string[] = [];
 
                                                     Object.entries(summary.rawCounts).forEach(([pos, count]) => {
                                                         if (count > 0) {
