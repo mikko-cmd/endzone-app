@@ -236,7 +236,6 @@ export async function GET(
               fumbles: null,
               fumbles_lost: null,
 
-              fantasy_points: null,
               snap_percentage: null,
               game_result: null
             });
