@@ -8,12 +8,23 @@ import { ChevronDown, Menu, X, User } from 'lucide-react';
 
 interface NavDropdownProps {
     title: string;
-    items: { label: string; href: string }[];
+    items: { label: string; href: string; disabled?: boolean }[];
     isOpen: boolean;
     onToggle: () => void;
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+    mainHref?: string; // Add main page URL for the dropdown title
 }
 
-const NavDropdown = ({ title, items, isOpen, onToggle }: NavDropdownProps) => {
+const NavDropdown = ({
+    title,
+    items,
+    isOpen,
+    onToggle,
+    onMouseEnter,
+    onMouseLeave,
+    mainHref
+}: NavDropdownProps) => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -28,31 +39,64 @@ const NavDropdown = ({ title, items, isOpen, onToggle }: NavDropdownProps) => {
     }, [isOpen, onToggle]);
 
     return (
-        <div className="relative" ref={dropdownRef}>
-            <button
-                onClick={onToggle}
-                className="flex items-center space-x-1 px-3 py-2 text-white hover:text-gray-300 transition-colors duration-200"
-                style={{ fontFamily: 'Consolas, monospace' }}
-            >
-                <span>[{title}]</span>
-                <ChevronDown
-                    size={14}
-                    className={`transform transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                />
-            </button>
+        <div
+            className="relative"
+            ref={dropdownRef}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
+            {mainHref ? (
+                // Clickable title that navigates to main page
+                <div className="flex items-center">
+                    <Link
+                        href={mainHref}
+                        className="px-3 py-2 text-white hover:text-gray-300 transition-colors duration-200"
+                        style={{ fontFamily: 'Consolas, monospace' }}
+                    >
+                        [{title}]
+                    </Link>
+                    <ChevronDown
+                        size={14}
+                        className={`transform transition-transform duration-200 text-white ml-1 ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                </div>
+            ) : (
+                // Original button behavior for items without main pages
+                <button
+                    onClick={onToggle}
+                    className="flex items-center space-x-1 px-3 py-2 text-white hover:text-gray-300 transition-colors duration-200"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                >
+                    <span>[{title}]</span>
+                    <ChevronDown
+                        size={14}
+                        className={`transform transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+            )}
 
             {isOpen && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-black border border-white shadow-lg z-50">
                     {items.map((item, index) => (
-                        <Link
-                            key={index}
-                            href={item.href}
-                            className="block px-4 py-2 text-white hover:bg-gray-900 hover:text-gray-300 transition-colors duration-200"
-                            style={{ fontFamily: 'Consolas, monospace' }}
-                            onClick={onToggle}
-                        >
-                            {item.label}
-                        </Link>
+                        item.disabled ? (
+                            <div
+                                key={index}
+                                className="px-4 py-2 text-gray-600 text-center border-b border-gray-700"
+                                style={{ fontFamily: 'Consolas, monospace' }}
+                            >
+                                {item.label}
+                            </div>
+                        ) : (
+                            <Link
+                                key={index}
+                                href={item.href}
+                                className="block px-4 py-2 text-white hover:bg-gray-900 hover:text-gray-300 transition-colors duration-200"
+                                style={{ fontFamily: 'Consolas, monospace' }}
+                                onClick={onToggle}
+                            >
+                                {item.label}
+                            </Link>
+                        )
                     ))}
                 </div>
             )}
@@ -60,7 +104,6 @@ const NavDropdown = ({ title, items, isOpen, onToggle }: NavDropdownProps) => {
     );
 };
 
-// Add leagues state and interface
 interface League {
     id: string;
     league_name: string;
@@ -84,7 +127,6 @@ export default function Navbar() {
         getUser();
     }, [supabase]);
 
-    // Add new useEffect to fetch leagues
     useEffect(() => {
         const fetchUserLeagues = async () => {
             if (!userEmail) return;
@@ -113,6 +155,14 @@ export default function Navbar() {
 
     const toggleDropdown = (dropdown: string) => {
         setOpenDropdown(openDropdown === dropdown ? null : dropdown);
+    };
+
+    const handleOpenDropdown = (dropdown: string) => {
+        setOpenDropdown(dropdown);
+    };
+
+    const handleCloseDropdown = () => {
+        setOpenDropdown(null);
     };
 
     const closeAllDropdowns = () => {
@@ -145,6 +195,7 @@ export default function Navbar() {
     const navItems = [
         {
             title: 'Home',
+            mainHref: '/dashboard', // Add main page URL
             items: [
                 { label: 'Dashboard', href: '/dashboard' },
                 { label: 'Activity Feed', href: '/dashboard/activity' },
@@ -152,10 +203,12 @@ export default function Navbar() {
         },
         {
             title: 'My Leagues',
+            mainHref: '/leagues', // Add main page URL
             items: getMyLeaguesItems()
         },
         {
             title: 'AI Tools',
+            mainHref: '/tools', // Add main page URL
             items: [
                 { label: 'Who Do I Start', href: '/tools/compare' },
                 { label: 'Waiver Wire Assistant', href: '/tools/waivers' },
@@ -165,6 +218,7 @@ export default function Navbar() {
         },
         {
             title: 'Research',
+            mainHref: '/research', // Add main page URL
             items: [
                 { label: 'Players', href: '/research/players' },
                 { label: 'ADP & Rankings', href: '/research/adp' },
@@ -173,6 +227,7 @@ export default function Navbar() {
         },
         {
             title: 'News',
+            mainHref: '/news', // Add main page URL
             items: [
                 { label: 'Injury Reports', href: '/news/injuries' },
                 { label: 'League News', href: '/news' },
@@ -180,6 +235,7 @@ export default function Navbar() {
         },
         {
             title: 'Settings',
+            // No mainHref for Settings - keep original behavior
             items: [
                 { label: 'Account', href: '/settings/account' },
                 { label: 'Theme', href: '/settings/theme' },
@@ -208,8 +264,11 @@ export default function Navbar() {
                                 key={navItem.title}
                                 title={navItem.title}
                                 items={navItem.items}
+                                mainHref={navItem.mainHref} // Pass main page URL
                                 isOpen={openDropdown === navItem.title}
                                 onToggle={() => toggleDropdown(navItem.title)}
+                                onMouseEnter={() => handleOpenDropdown(navItem.title)}
+                                onMouseLeave={handleCloseDropdown}
                             />
                         ))}
                     </div>
@@ -252,19 +311,38 @@ export default function Navbar() {
                                         className="text-white font-medium border-b border-gray-800 pb-2"
                                         style={{ fontFamily: 'Consolas, monospace' }}
                                     >
-                                        [{navItem.title}]
+                                        {navItem.mainHref ? (
+                                            <Link
+                                                href={navItem.mainHref}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                            >
+                                                [{navItem.title}]
+                                            </Link>
+                                        ) : (
+                                            `[${navItem.title}]`
+                                        )}
                                     </div>
                                     <div className="pl-4 space-y-2">
                                         {navItem.items.map((item, index) => (
-                                            <Link
-                                                key={index}
-                                                href={item.href}
-                                                className="block text-gray-400 hover:text-white transition-colors duration-200"
-                                                style={{ fontFamily: 'Consolas, monospace' }}
-                                                onClick={() => setIsMobileMenuOpen(false)}
-                                            >
-                                                {item.label}
-                                            </Link>
+                                            item.disabled ? (
+                                                <div
+                                                    key={index}
+                                                    className="text-gray-600 text-center"
+                                                    style={{ fontFamily: 'Consolas, monospace' }}
+                                                >
+                                                    {item.label}
+                                                </div>
+                                            ) : (
+                                                <Link
+                                                    key={index}
+                                                    href={item.href}
+                                                    className="block text-gray-400 hover:text-white transition-colors duration-200"
+                                                    style={{ fontFamily: 'Consolas, monospace' }}
+                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                >
+                                                    {item.label}
+                                                </Link>
+                                            )
                                         ))}
                                     </div>
                                 </div>

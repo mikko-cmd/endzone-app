@@ -17,7 +17,7 @@ export async function GET() {
     }
 
     const result = await response.json();
-    
+
     console.log('✅ Cron job completed:', result);
 
     return NextResponse.json({
@@ -29,4 +29,8 @@ export async function GET() {
   } catch (error: any) {
     console.error('❌ Cron job failed:', error.message);
     return NextResponse.json(
-      { success 
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+} 

@@ -10,6 +10,9 @@ interface League {
   league_name: string;
   sleeper_username: string | null;
   rosters_json: any | null;
+  platform?: string;           // Add this
+  is_manual?: boolean;         // Add this
+  setup_completed?: boolean;   // Add this
 }
 
 interface TradeProposal {
@@ -263,40 +266,99 @@ export default function TradeFinderPage() {
             [select league]
           </h3>
 
-          {leagues.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle size={48} className="mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-400 mb-4">No leagues found</p>
-              <Link
-                href="/leagues"
-                className="inline-flex items-center px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                add a league
-              </Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {leagues.map((league) => (
-                <button
-                  key={league.sleeper_league_id}
-                  onClick={() => setSelectedLeague(league.sleeper_league_id)}
-                  className={`p-4 border transition-all text-left ${selectedLeague === league.sleeper_league_id
-                    ? 'border-white bg-white/10'
-                    : 'border-white/20 hover:border-white/40 hover:bg-white/5'
-                    }`}
-                  style={{ fontFamily: 'Consolas, monospace' }}
-                >
-                  <div className="font-medium">
-                    {league.league_name || league.sleeper_league_id}
+          {(() => {
+            // Filter out manual leagues - only show Sleeper sync'd leagues
+            const sleeperLeagues = leagues.filter(league => !league.is_manual);
+            const manualLeagues = leagues.filter(league => league.is_manual);
+
+            if (leagues.length === 0) {
+              return (
+                <div className="text-center py-8">
+                  <AlertCircle size={48} className="mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-400 mb-4">No leagues found</p>
+                  <Link
+                    href="/leagues"
+                    className="inline-flex items-center px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                  >
+                    add a league
+                  </Link>
+                </div>
+              );
+            }
+
+            if (sleeperLeagues.length === 0) {
+              return (
+                <div className="text-center py-8">
+                  <TrendingUp size={48} className="mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-400 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+                    No Sleeper leagues available for trade analysis
+                  </p>
+                  <p className="text-sm text-gray-500 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+                    Trade Finder requires live Sleeper data. Manual leagues can use the Trade Calculator (coming soon).
+                  </p>
+                  {manualLeagues.length > 0 && (
+                    <p className="text-xs text-gray-600 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+                      You have {manualLeagues.length} manual league(s) that aren't eligible for trade suggestions.
+                    </p>
+                  )}
+                  <Link
+                    href="/leagues/connect"
+                    className="inline-flex items-center px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors"
+                    style={{ fontFamily: 'Consolas, monospace' }}
+                  >
+                    connect sleeper league
+                  </Link>
+                </div>
+              );
+            }
+
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sleeperLeagues.map((league) => (
+                    <button
+                      key={league.sleeper_league_id}
+                      onClick={() => setSelectedLeague(league.sleeper_league_id)}
+                      className={`p-4 border transition-all text-left ${selectedLeague === league.sleeper_league_id
+                          ? 'border-white bg-white/10'
+                          : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+                        }`}
+                      style={{ fontFamily: 'Consolas, monospace' }}
+                    >
+                      <div className="font-medium">
+                        {league.league_name || league.sleeper_league_id}
+                      </div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        @{league.sleeper_username || 'unknown'}
+                      </div>
+                      <div className="text-xs text-green-400 mt-1">
+                        ✓ Sleeper Sync'd
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Show info about filtered leagues */}
+                {manualLeagues.length > 0 && (
+                  <div className="mt-6 p-4 bg-yellow-400/10 border border-yellow-400/20 rounded">
+                    <div className="flex items-start space-x-2">
+                      <AlertCircle size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
+                        <p className="text-yellow-400 font-medium">
+                          {manualLeagues.length} manual league(s) hidden
+                        </p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          Manual leagues ({manualLeagues.map(l => l.league_name).join(', ')}) don't have live trade data.
+                          Use the Trade Calculator instead (coming soon).
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-400 mt-1">
-                    @{league.sleeper_username || 'unknown'}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+                )}
+              </>
+            );
+          })()}
 
           {selectedLeague && (
             <div className="mt-6 pt-6 border-t border-white/20">
