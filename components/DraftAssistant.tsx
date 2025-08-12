@@ -629,7 +629,11 @@ export default function DraftAssistant() {
         }
 
         // Mark as processing
-        setProcessingPicks(prev => new Set([...prev, pickNumber]));
+        setProcessingPicks(prev => {
+            const newSet = new Set(prev);
+            newSet.add(pickNumber);
+            return newSet;
+        });
 
         log('📥 New Sleeper pick:', sleeperPick);
 
