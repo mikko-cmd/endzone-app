@@ -442,7 +442,7 @@ function calculatePositionalScarcity(position: string, projectedPoints: number):
         DEF: 0.05 // Low scarcity
     };
 
-    const multiplier = scarcityMultipliers[position] || 0;
+    const multiplier = (scarcityMultipliers as any)[position] || 0;
     return projectedPoints * multiplier;
 }
 
