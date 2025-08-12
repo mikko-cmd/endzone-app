@@ -101,8 +101,8 @@ export async function POST(request: Request) {
     console.log(`[RosterSync] Essential data fetched in ${Date.now() - startTime}ms`);
 
     // Try to fetch player data and stats, but don't fail if they timeout
-    let playersData = {};
-    let statsData = {};
+    let playersData: any = {};
+    let statsData: any = {};
 
     try {
       const [playersRes, statsRes] = await Promise.all([
