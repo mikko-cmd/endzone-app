@@ -15,9 +15,9 @@ interface DraftPick {
     round: number;
     player: string;
     position: string;
-    team: string;
-    adp: number;
-    value: number;
+    team?: string;
+    adp?: number;
+    value?: number;
 }
 
 interface TeamComposition {
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 
         // Calculate user team composition
         const userPicks = picks.filter(p => userTeamPicks.includes(p.pick));
-        const teamComposition = calculateTeamComposition(userPicks);
+        const teamComposition = calculateTeamComposition(userPicks as DraftPick[]);
 
         // Get available players
         const availablePlayers = adpData.filter(player =>
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         );
 
         // Calculate draft analysis
-        const analysis = analyzeDraft(picks, userPicks, adpData, leagueSize);
+        const analysis = analyzeDraft(picks as DraftPick[], userPicks as DraftPick[], adpData, leagueSize);
 
         return NextResponse.json({
             success: true,
