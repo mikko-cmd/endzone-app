@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts 
+
+# ESPN API research files (temporary)
+espn-*.json
+davante-adams-*.json
+espn-api-results/
+espn-skill-player-*.json
