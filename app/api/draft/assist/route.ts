@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { DraftDataService } from '@/lib/draftData';
 import { DraftHeuristics } from '@/lib/draftHeuristics';
 import { generateCoachRecommendation } from '@/lib/coachPrompt';
+import { DraftState } from '@/lib/types/draft';
 import { z } from 'zod';
 
 // Input validation schema
