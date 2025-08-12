@@ -43,30 +43,26 @@ export async function GET() {
                 };
             }) || [];
 
-            const playersWithNews = await Promise.all(playerPromises);
+            const fallbackPlayers = await Promise.all(playerPromises);
 
             return NextResponse.json({
-                playersWithNews: playersWithNews.filter(p => p.name !== 'Unknown'),
+                playersWithNews: fallbackPlayers,
                 note: "Fallback method used - foreign key might not be set up"
             });
         }
 
-        // If join worked
-        const playersWithNews = newsWithPlayers?.map(item => ({
+        // If join worked - fix the type issue
+        const playersWithNews = newsWithPlayers?.map((item: any) => ({
             sleeper_id: item.player_sleeper_id,
-            name: item.players.name,
-            position: item.players.position,
-            team: item.players.team,
+            name: item.players?.name || 'Unknown',
+            position: item.players?.position || '?',
+            team: item.players?.team || '?',
             headline: item.headline
         }));
 
         return NextResponse.json({ playersWithNews });
 
     } catch (error: any) {
-        console.error('[Enhanced Trade] Error:', error);
-        return NextResponse.json({
-            error: 'Failed to generate enhanced trade suggestions',
-            details: error.message || 'Unknown error'
-        }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
     }
 }
