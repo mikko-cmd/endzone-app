@@ -138,7 +138,7 @@ export default function Navbar() {
                 if (data.success) {
                     setUserLeagues(data.data);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Failed to fetch user leagues:', error);
             } finally {
                 setLeaguesLoading(false);

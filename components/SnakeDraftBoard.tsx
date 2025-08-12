@@ -191,7 +191,7 @@ export default function SnakeDraftBoard({
                         const data = await response.json();
                         setSearchResults(data.success ? data.data : []);
                     }
-                } catch (error) {
+                } catch (error: any) {
                     console.error('Search failed:', error);
                 } finally {
                     setLoadingSearch(false);

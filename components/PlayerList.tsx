@@ -39,7 +39,7 @@ export default function PlayerList({ onSelectPlayer, excludePlayerNames = [] }: 
                         setPlayers(data.data || []);
                     }
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Failed to load ADP players:', error);
             } finally {
                 setLoading(false);
@@ -70,22 +70,22 @@ export default function PlayerList({ onSelectPlayer, excludePlayerNames = [] }: 
             if (excludePlayerNames.includes(player.name)) {
                 return false;
             }
-            
+
             // Check for partial matches to handle name variations
             // e.g., "Kenneth Walker III" vs "Kenneth Walker"
             const playerNameLower = player.name.toLowerCase();
             const isExcluded = excludePlayerNames.some(excludedName => {
                 const excludedNameLower = excludedName.toLowerCase();
-                
+
                 // Check if names match when removing suffixes (Jr, Sr, III, etc.)
                 const cleanPlayerName = playerNameLower.replace(/\s+(jr|sr|iii|ii|iv|v)\.?\s*$/i, '').trim();
                 const cleanExcludedName = excludedNameLower.replace(/\s+(jr|sr|iii|ii|iv|v)\.?\s*$/i, '').trim();
-                
+
                 return cleanPlayerName === cleanExcludedName ||
-                       playerNameLower.includes(excludedNameLower) ||
-                       excludedNameLower.includes(playerNameLower);
+                    playerNameLower.includes(excludedNameLower) ||
+                    excludedNameLower.includes(playerNameLower);
             });
-            
+
             return !isExcluded;
         });
 
@@ -131,8 +131,8 @@ export default function PlayerList({ onSelectPlayer, excludePlayerNames = [] }: 
                             key={pos}
                             onClick={() => setSelectedPosition(pos)}
                             className={`px-3 py-1 font-mono text-xs border border-white/20 whitespace-nowrap ${selectedPosition === pos
-                                    ? 'bg-white text-black'
-                                    : 'bg-black text-white hover:bg-gray-900'
+                                ? 'bg-white text-black'
+                                : 'bg-black text-white hover:bg-gray-900'
                                 }`}
                         >
                             {pos}

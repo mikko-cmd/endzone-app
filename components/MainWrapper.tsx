@@ -25,7 +25,7 @@ export default function MainWrapper({ children }: MainWrapperProps) {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 setIsAuthenticated(!!user);
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Auth check failed:', error);
                 setIsAuthenticated(false);
             } finally {

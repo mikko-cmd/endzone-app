@@ -86,7 +86,7 @@ export default function SimpleDraftRoom() {
                 // Fallback: show a simple error message or the basic modal
                 alert(`Player details not available for ${player.player}`);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching player details:', error);
             alert(`Error loading player details for ${player.player}`);
         } finally {
@@ -138,7 +138,7 @@ export default function SimpleDraftRoom() {
             } else {
                 console.warn(`⚠️ No player found for Sleeper ID: ${sleeperPick.player_id}`);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ Error handling Sleeper pick:', error);
         }
     }, []);
@@ -174,7 +174,7 @@ export default function SimpleDraftRoom() {
             }
 
             console.log('✅ Force sync complete');
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ Error force syncing picks:', error);
         }
     };

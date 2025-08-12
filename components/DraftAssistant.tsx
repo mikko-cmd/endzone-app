@@ -549,8 +549,8 @@ export default function DraftAssistant() {
             } else {
                 log(`❌ CPU FAILED: Team ${teamNumber} couldn't select a player`);
             }
-        } catch (error) {
-            error(`❌ CPU ERROR: Team ${teamNumber}:`, error);
+        } catch (err) {
+            error(`❌ CPU ERROR: Team ${teamNumber}:`, err);
         }
     }, [isPaused, executeCPUPick, draftPlayer]);
 
@@ -660,7 +660,7 @@ export default function DraftAssistant() {
                 }
                 return [...prev, newPick].sort((a, b) => a.pick - b.pick);
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ Error resolving Sleeper pick:', error);
             // Fallback with player ID
             const newPick: DraftPick = {
@@ -1330,7 +1330,7 @@ export default function DraftAssistant() {
                                     console.warn('❌ Player not found in Sleeper database:', player.player);
                                     alert(`Player "${player.player}" not found in Sleeper database. The name might be formatted differently or the player might not be in Sleeper's database.`);
                                 }
-                            } catch (error) {
+                            } catch (error: any) {
                                 console.error('Error looking up player:', error);
                                 alert(`Error looking up player "${player.player}"`);
                             }
