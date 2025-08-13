@@ -33,6 +33,11 @@ const QB_BENCHMARKS: PositionBenchmarks = {
     interceptions: [0, 0, 1],           // Lower is better
     rushing_yards: [2, 8, 18],
     rushing_tds: [0, 0, 0],
+    carries: [0, 1, 2],                 // QBs occasionally carry
+    receptions: [0, 0, 0],              // QBs don't receive
+    receiving_yards: [0, 0, 0],         // QBs don't receive
+    receiving_tds: [0, 0, 0],           // QBs don't receive
+    targets: [0, 0, 0],                 // QBs don't get targeted
     fantasy_points: [12, 18, 24],
     sacks: [0, 1, 2],                   // Lower is better
     fumbles: [0, 0, 0],                 // Lower is better
