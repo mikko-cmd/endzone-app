@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import FootballFieldBackground from '@/components/FootballFieldBackground';
 
@@ -13,27 +13,61 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
+  // Debug: Test if state is updating
+  useEffect(() => {
+    console.log('🔥 Email state changed:', email);
+  }, [email]);
+
+  useEffect(() => {
+    console.log('🔥 Password state changed:', password.length, 'characters');
+  }, [password]);
+
+  useEffect(() => {
+    const messageParam = searchParams.get('message');
+    if (messageParam) {
+      setMessage(messageParam);
+    }
+  }, [searchParams]);
+
   const handleLogin = async (e: React.FormEvent) => {
+    console.log('🔥 Form submitted!'); // This should appear immediately
     e.preventDefault();
+    console.log('🔥 Default prevented, email:', email, 'password length:', password.length);
+
     setLoading(true);
+    setError("");
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      console.log('🔥 About to call Supabase auth...');
+
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(), // Remove any whitespace
+        password: password,
       });
 
-      if (error) {
-        // no toast
-      } else {
+      console.log('🔥 Supabase response:', { data, authError });
+
+      if (authError) {
+        console.error('🔥 Login error:', authError);
+        setError(`Login failed: ${authError.message}`);
+      } else if (data.user) {
+        console.log('🔥 Login successful! Redirecting...');
         router.push("/dashboard");
+      } else {
+        console.log('🔥 No error but no user?');
+        setError("Login succeeded but no user data received");
       }
-    } catch (error) {
-      // no toast
+    } catch (error: any) {
+      console.error('🔥 Unexpected login error:', error);
+      setError(`Unexpected error: ${error.message || "Unknown error"}`);
     } finally {
+      console.log('🔥 Setting loading to false');
       setLoading(false);
     }
   };
@@ -52,6 +86,14 @@ export default function LoginPage() {
               [log in]
             </p>
           </div>
+
+          {message && (
+            <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500 rounded">
+              <p className="text-blue-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
+                {message}
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
@@ -85,6 +127,14 @@ export default function LoginPage() {
                 placeholder="[enter password]"
               />
             </div>
+
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500 rounded">
+                <p className="text-red-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
+                  {error}
+                </p>
+              </div>
+            )}
 
             <Button
               type="submit"

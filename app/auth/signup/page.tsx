@@ -82,20 +82,21 @@ export default function SignupPage() {
           data: {
             first_name: formData.firstName,
             last_name: formData.lastName,
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
       if (error) {
+        console.error('Signup error:', error);
         setErrors({ submit: error.message });
       } else {
+        console.log('Signup successful:', data);
         setSuccess(true);
-        // User will be redirected to email confirmation or dashboard
-        setTimeout(() => {
-          router.push("/auth/login?message=Check your email to confirm your account");
-        }, 2000);
+        // Don't redirect immediately - let them see the success message
       }
     } catch (error: any) {
+      console.error('Unexpected error:', error);
       setErrors({ submit: error.message || "An unexpected error occurred" });
     } finally {
       setLoading(false);
@@ -114,9 +115,16 @@ export default function SignupPage() {
             <p className="text-gray-300 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
               [check your email to confirm your account]
             </p>
-            <p className="text-gray-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
-              [redirecting to login...]
+            <p className="text-gray-400 text-sm mb-6" style={{ fontFamily: 'Consolas, monospace' }}>
+              [click the link in your email, then return to log in]
             </p>
+            <Link
+              href="/auth/login"
+              className="inline-block bg-white text-black px-6 py-2 rounded hover:bg-gray-200 transition-colors"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              [go to login]
+            </Link>
           </div>
         </div>
       </div>
