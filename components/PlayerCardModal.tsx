@@ -849,7 +849,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
 
         if (playerData) {
           setPlayer(playerData);
-          const safeName = playerData.full_name || playerData.name || 'Unknown Player';
+          const safeName = playerData.full_name || `${playerData.first_name} ${playerData.last_name}` || 'Unknown Player';
           console.log(`✅ Found player: ${safeName}`);
         } else {
           setError('Player not found.');
