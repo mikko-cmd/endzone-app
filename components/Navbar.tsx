@@ -26,6 +26,48 @@ const NavDropdown = ({
     mainHref
 }: NavDropdownProps) => {
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const [openSubMenu, setOpenSubMenu] = useState<string | null>(null);
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Clear any existing timeout
+    const clearLeaveTimeout = () => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+    };
+
+    // Handle mouse enter - immediately open
+    const handleMouseEnter = () => {
+        clearLeaveTimeout();
+        onMouseEnter();
+    };
+
+    // Handle mouse leave - delay before closing
+    const handleMouseLeave = () => {
+        clearLeaveTimeout();
+        timeoutRef.current = setTimeout(() => {
+            onMouseLeave();
+        }, 150); // 150ms delay before closing
+    };
+
+    // Handle submenu
+    const handleSubMenuEnter = (label: string) => {
+        setOpenSubMenu(label);
+    };
+
+    const handleSubMenuLeave = () => {
+        setOpenSubMenu(null);
+    };
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -42,11 +84,10 @@ const NavDropdown = ({
         <div
             className="relative"
             ref={dropdownRef}
-            onMouseEnter={onMouseEnter}
-            onMouseLeave={onMouseLeave}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
         >
             {mainHref ? (
-                // Clickable title that navigates to main page
                 <div className="flex items-center">
                     <Link
                         href={mainHref}
@@ -61,7 +102,6 @@ const NavDropdown = ({
                     />
                 </div>
             ) : (
-                // Original button behavior for items without main pages
                 <button
                     onClick={onToggle}
                     className="flex items-center space-x-1 px-3 py-2 text-white hover:text-gray-300 transition-colors duration-200"
@@ -74,31 +114,73 @@ const NavDropdown = ({
                     />
                 </button>
             )}
-
             {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 bg-black border border-white shadow-lg z-50">
-                    {items.map((item, index) => (
-                        ('disabled' in item && item.disabled === true) ? (
-                            <div
-                                key={index}
-                                className="px-4 py-2 text-gray-600 text-center border-b border-gray-700"
-                                style={{ fontFamily: 'Consolas, monospace' }}
-                            >
-                                {item.label}
-                            </div>
-                        ) : (
-                            <Link
-                                key={index}
-                                href={item.href}
-                                className="block px-4 py-2 text-white hover:bg-gray-900 hover:text-gray-300 transition-colors duration-200"
-                                style={{ fontFamily: 'Consolas, monospace' }}
-                                onClick={onToggle}
-                            >
-                                {item.label}
-                            </Link>
-                        )
-                    ))}
-                </div>
+                <>
+                    {/* Invisible bridge to prevent hover gaps */}
+                    <div className="absolute top-full left-0 w-48 h-1 bg-transparent"></div>
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-black border border-white shadow-lg z-50">
+                        {items.map((item, index) => {
+                            const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
+                            if (('disabled' in item && item.disabled === true)) {
+                                return (
+                                    <div
+                                        key={index}
+                                        className="px-4 py-2 text-gray-600 text-center border-b border-gray-700"
+                                        style={{ fontFamily: 'Consolas, monospace' }}
+                                    >
+                                        {item.label}
+                                    </div>
+                                );
+                            }
+                            if (hasSubItems) {
+                                return (
+                                    <div
+                                        key={index}
+                                        className="relative"
+                                        onMouseEnter={() => handleSubMenuEnter(item.label)}
+                                        onMouseLeave={handleSubMenuLeave}
+                                    >
+                                        <div className="flex items-center justify-between px-4 py-2 text-white hover:bg-gray-900 hover:text-gray-300 transition-colors duration-200 cursor-pointer">
+                                            <span style={{ fontFamily: 'Consolas, monospace' }}>
+                                                {item.label}
+                                            </span>
+                                            <ChevronDown
+                                                size={12}
+                                                className="transform -rotate-90"
+                                            />
+                                        </div>
+                                        {openSubMenu === item.label && (
+                                            <div className="absolute left-full top-0 w-48 bg-black border border-white shadow-lg z-50">
+                                                {item.subItems!.map((subItem, subIndex) => (
+                                                    <Link
+                                                        key={subIndex}
+                                                        href={subItem.href}
+                                                        className="block px-4 py-2 text-white hover:bg-gray-900 hover:text-gray-300 transition-colors duration-200"
+                                                        style={{ fontFamily: 'Consolas, monospace' }}
+                                                        onClick={onToggle}
+                                                    >
+                                                        {subItem.label}
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            }
+                            return (
+                                <Link
+                                    key={index}
+                                    href={item.href!}
+                                    className="block px-4 py-2 text-white hover:bg-gray-900 hover:text-gray-300 transition-colors duration-200"
+                                    style={{ fontFamily: 'Consolas, monospace' }}
+                                    onClick={onToggle}
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </>
             )}
         </div>
     );
