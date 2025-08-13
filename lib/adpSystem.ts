@@ -188,7 +188,7 @@ export class ADPSystem {
             team: adpData?.team || 'Unknown',
             adpData: adpData || undefined, // ✅ Convert null to undefined
             marketShare: marketShare || undefined, // ✅ Convert null to undefined
-            expertAnalysis,
+            expertAnalysis: expertAnalysis || undefined, // ✅ Convert null to undefined
             formatAdjustedADP
         };
     }
