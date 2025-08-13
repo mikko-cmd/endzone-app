@@ -171,6 +171,7 @@ export default function DraftAssistant() {
     const currentTeamRef = useRef(1);
     const draftActiveRef = useRef(false);
     const currentPickRef = useRef(1);
+    const pausedRef = useRef(false);
 
     // CPU team rosters tracking
     const [cpuRosters, setCpuRosters] = useState<CPUTeamRoster>({});
@@ -481,7 +482,7 @@ export default function DraftAssistant() {
 
         // WORKFLOW STEP 5: Continue draft flow
         setTimeout(() => {
-            if (!draftActiveRef.current || isPaused) {
+            if (!draftActiveRef.current || pausedRef.current) {  // ← Use ref instead of state
                 log('🛑 Draft stopped or paused');
                 return;
             }
@@ -503,10 +504,10 @@ export default function DraftAssistant() {
                 setSuggestions(null);
                 // WORKFLOW STEP 7: Trigger next CPU pick
                 setTimeout(() => {
-                    if (!isPaused && draftActiveRef.current) {
+                    if (!pausedRef.current && draftActiveRef.current) {
                         processCPUTurn(newTeam);
                     } else {
-                        log(`❌ CPU pick timeout cancelled: paused=${isPaused}, active=${draftActiveRef.current}`);
+                        log(`❌ CPU pick timeout cancelled: paused=${pausedRef.current}, active=${draftActiveRef.current}`);
                     }
                 }, 1000);
             }
@@ -524,7 +525,7 @@ export default function DraftAssistant() {
             return;
         }
 
-        if (isPaused) {
+        if (pausedRef.current) {
             log(`❌ CPU turn cancelled: draft is paused`);
             return;
         }
@@ -552,7 +553,7 @@ export default function DraftAssistant() {
         } catch (err) {
             error(`❌ CPU ERROR: Team ${teamNumber}:`, err);
         }
-    }, [isPaused, executeCPUPick, draftPlayer]);
+    }, [executeCPUPick, draftPlayer]);
 
     // Force CPU pick (used for draft start)
     const forceCPUPick = useCallback(async (teamNumber: number) => {
@@ -744,7 +745,7 @@ export default function DraftAssistant() {
 
         log('⏰ Timer effect:', { isDrafting, isPaused, currentTeamOnClock, userTeamPosition, timeRemaining });
 
-        if (isDrafting && !isPaused && currentTeamOnClock === userTeamPosition && timeRemaining > 0) {
+        if (isDrafting && currentTeamOnClock === userTeamPosition && timeRemaining > 0 && !isPaused) {
             log('🕐 Starting timer countdown...');
             timerRef.current = setTimeout(() => {
                 setTimeRemaining(prev => {
@@ -832,6 +833,7 @@ export default function DraftAssistant() {
         // Set up draft state
         setIsDrafting(true);
         setIsPaused(false);
+        pausedRef.current = false;  // ← Set ref immediately
         setCurrentTeamOnClock(1);
         setTimeRemaining(0);
 
@@ -858,21 +860,26 @@ export default function DraftAssistant() {
             log(`👤 USER STARTS: Team ${userTeamPosition} has first pick`);
             setTimeRemaining(pickTimer); // Set timer BEFORE activating draft
             setTimeout(() => fetchUserSuggestions(), 100);
+        } else {
+            // Use ref instead of state for immediate check
+            setTimeout(() => {
+                log(`📊 DRAFT WORKFLOW: Starting with Team 1`);
+                log(`🔍 Draft state check: paused=${pausedRef.current}, active=${draftActiveRef.current}`);
+
+                if (!pausedRef.current && draftActiveRef.current) {  // ← Use refs instead of state
+                    log(`🤖 CPU STARTS: Team 1 has first pick (user is team ${userTeamPosition})`);
+                    forceCPUPick(1);
+                } else {
+                    log(`❌ CPU start cancelled: paused=${pausedRef.current}, active=${draftActiveRef.current}`);
+                }
+            }, 100);
         }
-
-        setTimeout(() => {
-            log(`📊 DRAFT WORKFLOW: Starting with Team 1`);
-
-            if (userTeamPosition !== 1 && !isPaused && draftActiveRef.current) {
-                log(`�� CPU STARTS: Team 1 has first pick (user is team ${userTeamPosition})`);
-                forceCPUPick(1);
-            }
-        }, 100);
     }, [userTeamPosition, leagueSize, pickTimer, forceCPUPick]);
 
     const pauseDraft = () => {
         log('⏸️ Pausing draft...');
         setIsPaused(true);
+        pausedRef.current = true;
         setTimeRemaining(0);
         if (timerRef.current) {
             clearTimeout(timerRef.current);
@@ -883,12 +890,24 @@ export default function DraftAssistant() {
     const resumeDraft = () => {
         log('▶️ Resuming draft...');
         setIsPaused(false);
+        pausedRef.current = false;
+
+        // Force the draft to be active
+        draftActiveRef.current = true;
 
         if (currentTeamRef.current === userTeamPosition) {
+            log(`👤 Resuming USER turn: Team ${userTeamPosition}`);
             setTimeRemaining(pickTimer);
             fetchUserSuggestions();
         } else {
-            setTimeout(() => processCPUTurn(currentTeamRef.current), 500);
+            log(`🤖 Resuming CPU turn: Team ${currentTeamRef.current}`);
+            // Continue CPU workflow immediately
+            setTimeout(() => {
+                if (!pausedRef.current && draftActiveRef.current) {
+                    log(`🔥 Continuing CPU workflow for team ${currentTeamRef.current}`);
+                    processCPUTurn(currentTeamRef.current);
+                }
+            }, 100);
         }
     };
 
@@ -1225,7 +1244,7 @@ export default function DraftAssistant() {
                                         Team {currentTeamOnClock} on the clock
                                         {isPaused && <span className="text-yellow-400 ml-2">[paused]</span>}
                                     </div>
-                                    {currentTeamOnClock === userTeamPosition && timeRemaining > 0 && !isPaused && (
+                                    {isDrafting && currentTeamOnClock === userTeamPosition && timeRemaining > 0 && !isPaused && (
                                         <div className="flex items-center space-x-2">
                                             <Clock size={16} className="text-yellow-400" />
                                             <div className="text-lg font-bold text-yellow-400" style={{ fontFamily: 'Consolas, monospace' }}>
@@ -1377,7 +1396,7 @@ export default function DraftAssistant() {
                             </div>
 
                             {/* Position Buttons (console styled) */}
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 items-center">
                                 {positions.map(pos => (
                                     <button
                                         key={pos}
@@ -1409,13 +1428,32 @@ export default function DraftAssistant() {
                                 >
                                     rookies only
                                 </button>
+
+                                {/* Draft Timer - Inline with position buttons */}
+                                {isDrafting && !isPaused && (
+                                    <div className="ml-4 flex items-center space-x-2 px-3 py-1 bg-black">
+                                        <Clock size={14} className="text-yellow-400" />
+                                        <div className="text-sm font-bold text-yellow-400" style={{ fontFamily: 'Consolas, monospace' }}>
+                                            {currentTeamOnClock === userTeamPosition && timeRemaining > 0
+                                                ? `${Math.floor(timeRemaining / 60)}:${(timeRemaining % 60).toString().padStart(2, '0')}`
+                                                : `Team ${currentTeamOnClock}`}
+                                        </div>
+                                        <div className="text-xs text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
+                                            {currentTeamOnClock === userTeamPosition && timeRemaining > 0
+                                                ? 'Your Turn'
+                                                : isPaused
+                                                    ? 'Paused'
+                                                    : 'CPU Turn'}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* Player Table Header */}
                         <div className="bg-black border-b border-white/20 px-3 py-2">
                             <div className="grid grid-cols-12 gap-2 text-xs text-gray-400 font-medium" style={{ fontFamily: 'Consolas, monospace' }}>
-                                <div className="col-span-1">rk</div>
+                                <div className="col-span-1">+/rk</div>
                                 <div className="col-span-4">player</div>
                                 <div className="col-span-1">adp</div>
                                 <div className="col-span-1">bye</div>
@@ -1438,10 +1476,39 @@ export default function DraftAssistant() {
                                     {filteredPlayers.slice(0, 50).map((player, index) => (
                                         <div key={player.name} className="px-3 py-2 hover:bg-gray-900 border-b border-white/10">
                                             <div className="grid grid-cols-12 gap-2 items-center text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
-                                                <div className="col-span-1">
-                                                    <span className={`text-xs ${getTierColor(player.adp || 999)}`}>
-                                                        {player.pprRank || index + 1}
-                                                    </span>
+                                                <div className="col-span-1 flex items-center gap-1">
+                                                    <div className="flex gap-1">
+                                                        <button
+                                                            onClick={() => addToQueue(player)}
+                                                            className="w-6 h-6 bg-black border border-white/20 hover:bg-gray-900 text-white flex items-center justify-center"
+                                                            title="Add to queue"
+                                                        >
+                                                            <Plus size={12} />
+                                                        </button>
+                                                        {mode === 'mock' && isDrafting && !isPaused && currentTeamOnClock === userTeamPosition && !isPicking && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    log('📊 Manual pick attempt:', {
+                                                                        player: player.name,
+                                                                        currentTeam: currentTeamOnClock,
+                                                                        userTeam: userTeamPosition,
+                                                                        isPicking,
+                                                                        pickingRef: pickingRef.current
+                                                                    });
+                                                                    draftPlayer(player);
+                                                                }}
+                                                                className="w-6 h-6 bg-green-600 border border-green-500 hover:bg-green-700 text-white flex items-center justify-center"
+                                                                title="Manual pick"
+                                                            >
+                                                                <Plus size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 text-right">
+                                                        <span className={`text-xs ${getTierColor(player.adp || 999)}`}>
+                                                            {player.pprRank || index + 1}
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 <div className="col-span-4">
@@ -1475,32 +1542,7 @@ export default function DraftAssistant() {
                                                     {player.lastSeasonStats?.rushing?.touchdowns || player.lastSeasonStats?.receiving?.touchdowns || player.lastSeasonStats?.passing?.touchdowns || '-'}
                                                 </div>
 
-                                                <div className="col-span-1 flex gap-1">
-                                                    <button
-                                                        onClick={() => addToQueue(player)}
-                                                        className="w-6 h-6 bg-black border border-white/20 hover:bg-gray-900 text-white flex items-center justify-center"
-                                                        title="Add to queue"
-                                                    >
-                                                        <Plus size={12} />
-                                                    </button>
-                                                    {mode === 'mock' && isDrafting && !isPaused && currentTeamOnClock === userTeamPosition && !isPicking && (
-                                                        <button
-                                                            onClick={() => {
-                                                                log('📊 Manual pick attempt:', {
-                                                                    player: player.name,
-                                                                    currentTeam: currentTeamOnClock,
-                                                                    userTeam: userTeamPosition,
-                                                                    isPicking,
-                                                                    pickingRef: pickingRef.current
-                                                                });
-                                                                draftPlayer(player);
-                                                            }}
-                                                            className="w-6 h-6 bg-green-600 border border-green-500 hover:bg-green-700 text-white flex items-center justify-center"
-                                                            title="Draft player"
-                                                        >
-                                                            <Plus size={12} />
-                                                        </button>
-                                                    )}
+                                                <div className="col-span-1">
                                                 </div>
                                             </div>
                                         </div>
