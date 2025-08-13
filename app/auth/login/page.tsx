@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import FootballFieldBackground from '@/components/FootballFieldBackground';
 
-export default function LoginPage() {
+// Separate component for handling search params
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,7 +56,13 @@ export default function LoginPage() {
 
       if (authError) {
         console.error('🔥 Login error:', authError);
-        setError(`Login failed: ${authError.message}`);
+        if (authError.message.includes('Invalid login credentials')) {
+          setError("Invalid email or password. Please check your credentials.");
+        } else if (authError.message.includes('Email not confirmed')) {
+          setError("Please check your email and click the confirmation link before logging in.");
+        } else {
+          setError(authError.message);
+        }
       } else if (data.user) {
         console.log('🔥 Login successful! Redirecting...');
         router.push("/dashboard");
@@ -73,99 +80,123 @@ export default function LoginPage() {
   };
 
   return (
+    <div className="w-full max-w-md p-8 bg-black/80 border border-white rounded-lg backdrop-blur-sm">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>
+          [endzone]
+        </h1>
+        <p className="text-gray-300" style={{ fontFamily: 'Consolas, monospace' }}>
+          [log in]
+        </p>
+      </div>
+
+      {message && (
+        <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500 rounded">
+          <p className="text-blue-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
+            {message}
+          </p>
+        </div>
+      )}
+
+      <form onSubmit={handleLogin} className="space-y-6">
+        <div>
+          <Label htmlFor="email" className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+            [email]
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="mt-2 bg-black border-white text-white placeholder-gray-400"
+            style={{ fontFamily: 'Consolas, monospace' }}
+            placeholder="[enter email]"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="password" className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+            [password]
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="mt-2 bg-black border-white text-white placeholder-gray-400"
+            style={{ fontFamily: 'Consolas, monospace' }}
+            placeholder="[enter password]"
+          />
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-500/20 border border-red-500 rounded">
+            <p className="text-red-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
+              {error}
+            </p>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-white text-black hover:bg-gray-200 transition-colors"
+          style={{ fontFamily: 'Consolas, monospace' }}
+        >
+          {loading ? "[logging in...]" : "[log in]"}
+        </Button>
+      </form>
+
+      <div className="mt-6 text-center">
+        <Link
+          href="/auth/signup"
+          className="text-white hover:text-gray-300 transition-colors"
+          style={{ fontFamily: 'Consolas, monospace' }}
+        >
+          [need an account? sign up]
+        </Link>
+      </div>
+
+      <div className="mt-4 text-center">
+        <Link
+          href="/"
+          className="text-gray-400 hover:text-white transition-colors text-sm"
+          style={{ fontFamily: 'Consolas, monospace' }}
+        >
+          [back to home]
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// Loading fallback component
+function LoginFormFallback() {
+  return (
+    <div className="w-full max-w-md p-8 bg-black/80 border border-white rounded-lg backdrop-blur-sm">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>
+          [endzone]
+        </h1>
+        <p className="text-gray-300" style={{ fontFamily: 'Consolas, monospace' }}>
+          [loading...]
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
     <div className="relative min-h-screen">
       <FootballFieldBackground />
 
       <div className="relative z-10 flex items-center justify-center min-h-screen">
-        <div className="w-full max-w-md p-8 bg-black/80 border border-white rounded-lg backdrop-blur-sm">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>
-              [endzone]
-            </h1>
-            <p className="text-gray-300" style={{ fontFamily: 'Consolas, monospace' }}>
-              [log in]
-            </p>
-          </div>
-
-          {message && (
-            <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500 rounded">
-              <p className="text-blue-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
-                {message}
-              </p>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <Label htmlFor="email" className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                [email]
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="mt-2 bg-black border-white text-white placeholder-gray-400"
-                style={{ fontFamily: 'Consolas, monospace' }}
-                placeholder="[enter email]"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="password" className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
-                [password]
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="mt-2 bg-black border-white text-white placeholder-gray-400"
-                style={{ fontFamily: 'Consolas, monospace' }}
-                placeholder="[enter password]"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-500/20 border border-red-500 rounded">
-                <p className="text-red-400 text-sm" style={{ fontFamily: 'Consolas, monospace' }}>
-                  {error}
-                </p>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-white text-black hover:bg-gray-200 transition-colors"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              {loading ? "[logging in...]" : "[log in]"}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link
-              href="/auth/signup"
-              className="text-white hover:text-gray-300 transition-colors"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              [need an account? sign up]
-            </Link>
-          </div>
-
-          <div className="mt-4 text-center">
-            <Link
-              href="/"
-              className="text-gray-400 hover:text-white transition-colors text-sm"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              [back to home]
-            </Link>
-          </div>
-        </div>
+        <Suspense fallback={<LoginFormFallback />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
