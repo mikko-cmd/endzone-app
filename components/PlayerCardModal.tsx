@@ -213,7 +213,7 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
   }) => (
     <div className="flex-1 overflow-hidden">
       {data && data.length > 0 ? (
-        <div className="h-full overflow-y-auto">
+        <div className="h-full overflow-y-auto custom-scrollbar">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-black z-10 border border-white">
               {/* Section Headers Row */}
@@ -1110,7 +1110,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
                   <TabsTrigger value="ai" className="text-white data-[state=active]:bg-white data-[state=active]:text-black" style={{ fontFamily: 'Consolas, monospace' }}>AI Insights</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="summary" className="flex-1 overflow-y-auto mt-4">
+                <TabsContent value="summary" className="flex-1 overflow-y-auto terminal-scrollbar mt-4">
                   <div className="text-sm text-white leading-relaxed" style={{ fontFamily: 'Consolas, monospace' }}>
                     {outlook || 'Loading player outlook...'}
                   </div>
@@ -1128,7 +1128,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
                   />
                 </TabsContent>
 
-                <TabsContent value="news" className="flex-1 overflow-y-auto mt-4">
+                <TabsContent value="news" className="flex-1 overflow-y-auto terminal-scrollbar mt-4">
                   <div className="text-sm text-white" style={{ fontFamily: 'Consolas, monospace' }}>
                     <h3 className="font-semibold mb-1">Recent News</h3>
                     {playerNews?.lastUpdated && (

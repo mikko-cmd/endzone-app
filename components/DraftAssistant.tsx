@@ -1466,7 +1466,7 @@ export default function DraftAssistant() {
                         </div>
 
                         {/* Player List */}
-                        <div className="flex-1 overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar">
                             {loadingPlayers ? (
                                 <div className="p-4 text-center text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
                                     loading players...
@@ -1575,7 +1575,7 @@ export default function DraftAssistant() {
                         </div>
 
                         {/* Tab Content */}
-                        <div className="flex-1 overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto terminal-scrollbar">
                             {activeTab === 'queue' && (
                                 <div className="p-4">
                                     {queue.length === 0 ? (

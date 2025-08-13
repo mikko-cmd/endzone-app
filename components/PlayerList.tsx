@@ -142,7 +142,7 @@ export default function PlayerList({ onSelectPlayer, excludePlayerNames = [] }: 
             </div>
 
             {/* Player List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {loading ? (
                     <div className="p-4 text-center text-gray-400 font-mono text-sm">
                         Loading players...
