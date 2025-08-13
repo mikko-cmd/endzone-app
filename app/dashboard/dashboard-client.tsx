@@ -101,7 +101,7 @@ export default function DashboardClient({
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!leagueId || !userEmail || !sleeperUsername) {
+    if (!leagueId || !sleeperUsername) {
       return;
     }
     setSyncingLeague(true);
@@ -112,7 +112,6 @@ export default function DashboardClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sleeper_league_id: leagueId,
-          user_email: userEmail,
           sleeper_username: sleeperUsername,
         }),
       });
@@ -138,7 +137,8 @@ export default function DashboardClient({
       setLeagueId('');
       setSleeperUsername('');
     } catch (error: any) {
-      console.error('Connect League Error:', error);
+      console.error('Connection failed:', error);
+      alert('Failed to connect league: ' + error.message);
     } finally {
       setSyncingLeague(false);
     }

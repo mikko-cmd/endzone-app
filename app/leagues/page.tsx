@@ -204,8 +204,8 @@ export default function LeaguesPage() {
               <div
                 key={league.sleeper_league_id}
                 className={`bg-black border transition-all duration-200 h-full relative ${removeMode
-                    ? 'border-red-400/40 hover:border-red-400 hover:bg-red-400/5 cursor-pointer'
-                    : 'border-white/20 hover:border-white/40 hover:bg-gray-900'
+                  ? 'border-red-400/40 hover:border-red-400 hover:bg-red-400/5 cursor-pointer'
+                  : 'border-white/20 hover:border-white/40 hover:bg-gray-900'
                   }`}
                 style={{ fontFamily: 'Consolas, monospace' }}
                 onClick={removeMode ? (e) => handleDeleteClick(league, e) : undefined}
@@ -284,8 +284,8 @@ export default function LeaguesPage() {
             <button
               onClick={toggleRemoveMode}
               className={`px-6 py-3 border transition-colors duration-200 ${removeMode
-                  ? 'border-red-400 text-red-400 hover:bg-red-400 hover:text-black'
-                  : 'border-red-400/40 text-red-400/60 hover:border-red-400 hover:text-red-400'
+                ? 'border-red-400 text-red-400 hover:bg-red-400 hover:text-black'
+                : 'border-red-400/40 text-red-400/60 hover:border-red-400 hover:text-red-400'
                 }`}
               style={{ fontFamily: 'Consolas, monospace' }}
             >

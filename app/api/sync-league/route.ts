@@ -18,16 +18,24 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// Zod schema for request body validation
+// Updated Zod schema - removed user_email since we'll get it from auth
 const syncLeagueSchema = z.object({
   sleeper_league_id: z.string().nonempty(),
-  user_email: z.string().email(),
   sleeper_username: z.string().nonempty(),
 });
 
 export async function POST(request: Request) {
   try {
-    // 1. Validate request body
+    // 1. Get authenticated user
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('Authentication error:', authError);
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // 2. Validate request body
     const body = await request.json();
     console.log('Incoming request to /api/sync-league:', body);
 
@@ -35,9 +43,9 @@ export async function POST(request: Request) {
     if (!validation.success) {
       return NextResponse.json({ success: false, error: 'Invalid request body', details: validation.error.flatten() }, { status: 400 });
     }
-    const { sleeper_league_id, user_email, sleeper_username } = validation.data;
+    const { sleeper_league_id, sleeper_username } = validation.data;
 
-    // 2. Fetch league metadata from Sleeper API
+    // 3. Fetch league metadata from Sleeper API
     console.log(`Fetching league data for ID: ${sleeper_league_id}`);
     const sleeperRes = await fetch(`https://api.sleeper.app/v1/league/${sleeper_league_id}`);
 
@@ -49,23 +57,25 @@ export async function POST(request: Request) {
     const sleeperLeagueData = await sleeperRes.json();
     console.log('Successfully fetched league data:', sleeperLeagueData);
 
-    // 3. UPSERT data into Supabase
-    const supabase = createClient();
+    // 4. UPSERT data into Supabase with all required columns
     const leagueDataToUpsert = {
       sleeper_league_id,
-      user_email,
+      user_email: user.email!,
       sleeper_username,
       league_name: sleeperLeagueData.name,
+      platform: 'Sleeper', // Set platform for Sleeper leagues
+      is_manual: false, // Sleeper leagues are not manual
       last_synced_at: new Date().toISOString(),
     };
 
-    // Log the object being upserted, as requested
+    // Log the object being upserted
     console.log("Upserting league row:", leagueDataToUpsert);
 
+    // Use sleeper_league_id as primary conflict resolution
     const { data: upsertedData, error: upsertError } = await supabase
       .from('leagues')
       .upsert(leagueDataToUpsert, {
-        onConflict: 'sleeper_league_id, user_email', // Use the new composite key to resolve conflicts
+        onConflict: 'sleeper_league_id', // Use single column for conflict resolution
       })
       .select()
       .single();
@@ -77,7 +87,31 @@ export async function POST(request: Request) {
 
     console.log('Supabase upsert successful:', upsertedData);
 
-    // 4. Return the upserted row
+    // 5. Automatically sync roster data
+    console.log('Automatically syncing roster data...');
+    try {
+      const rosterSyncResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/rosters/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sleeper_league_id,
+          user_email: user.email!,
+          sleeper_username,
+        }),
+      });
+
+      if (rosterSyncResponse.ok) {
+        const rosterResult = await rosterSyncResponse.json();
+        console.log('Roster sync successful:', rosterResult);
+      } else {
+        console.warn('Roster sync failed, but league sync succeeded');
+      }
+    } catch (rosterError: any) {
+      console.warn('Failed to sync roster automatically:', rosterError.message);
+      // Don't fail the entire operation if roster sync fails
+    }
+
+    // 6. Return the upserted row
     return NextResponse.json({ success: true, data: upsertedData });
 
   } catch (e: any) {

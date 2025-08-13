@@ -71,8 +71,8 @@ export default function ConnectLeaguePage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sleeper_league_id: sleeperLeagueId,
-                    user_email: user.email,
                     sleeper_username: sleeperUsername,
+                    // Removed user_email - now handled by auth in API
                 }),
             });
 

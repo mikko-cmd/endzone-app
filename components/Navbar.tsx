@@ -148,6 +148,18 @@ export default function Navbar() {
         fetchUserLeagues();
     }, [userEmail]);
 
+    useEffect(() => {
+        const handleLeagueDeleted = () => {
+            // Refetch leagues when a league is deleted
+            if (userEmail) {
+                fetchUserLeagues();
+            }
+        };
+
+        window.addEventListener('leagueDeleted', handleLeagueDeleted);
+        return () => window.removeEventListener('leagueDeleted', handleLeagueDeleted);
+    }, [userEmail]);
+
     const handleLogout = async () => {
         await supabase.auth.signOut();
         router.push('/auth/login');
