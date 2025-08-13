@@ -284,14 +284,14 @@ RULES:
 
         // This would iterate through all players and find discrepancies
         // For now, return players with expert "value" analysis
-        for (const [playerName, analysis] of this.expertAnalysisCache) {
+        this.expertAnalysisCache.forEach((analysis, playerName) => {
             if (analysis.toLowerCase().includes('value') || analysis.toLowerCase().includes('undervalued')) {
                 const context = this.getPlayerContext(playerName, leagueFormat);
                 if (!position || context.position === position) {
                     valuePicks.push(context);
                 }
             }
-        }
+        });
 
         return valuePicks.slice(0, 10); // Top 10 value picks
     }
