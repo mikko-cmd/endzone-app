@@ -1,6 +1,6 @@
 // Core draft assistant types
 export type ScoringFormat = 'PPR' | 'Half' | 'Std' | '2QB' | 'Dynasty';
-export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DST';
+export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DST' | 'BPA';
 
 export interface DraftPlayer {
     name: string;
