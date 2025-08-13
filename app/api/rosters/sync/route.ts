@@ -47,6 +47,48 @@ const triggerAutoPlayerProcessing = async () => {
   }
 };
 
+// Add this function after line 48, before the main POST function
+const createEmptyRosterStructure = async (leagueId: string, username: string) => {
+  try {
+    // Fetch league settings to get roster configuration
+    const leagueRes = await fetchWithTimeout(`https://api.sleeper.app/v1/league/${leagueId}`, 10000);
+    if (!leagueRes.ok) {
+      throw new Error('Failed to fetch league settings');
+    }
+
+    const leagueData = await leagueRes.json();
+    const settings = leagueData.roster_positions || [];
+
+    // Count roster positions
+    const rosterStructure = {
+      QB: settings.filter((pos: string) => pos === 'QB').length,
+      RB: settings.filter((pos: string) => pos === 'RB').length,
+      WR: settings.filter((pos: string) => pos === 'WR').length,
+      TE: settings.filter((pos: string) => pos === 'TE').length,
+      FLEX: settings.filter((pos: string) => pos === 'FLEX').length,
+      K: settings.filter((pos: string) => pos === 'K').length,
+      DEF: settings.filter((pos: string) => pos === 'DEF').length,
+      BN: settings.filter((pos: string) => pos === 'BN').length,
+    };
+
+    // Create empty roster structure
+    const emptyRosterData = {
+      username,
+      starters: [], // Empty array - no players assigned yet
+      roster: [], // Empty array - no players assigned yet
+      rosterSettings: rosterStructure, // Store the roster configuration
+      isPreDraft: true, // Flag to indicate this is a pre-draft league
+      totalRosterSpots: settings.length,
+      leagueStatus: leagueData.status || 'pre_draft',
+    };
+
+    return emptyRosterData;
+  } catch (error: any) {
+    console.error('Failed to create empty roster structure:', error);
+    return null;
+  }
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -157,10 +199,46 @@ export async function POST(request: Request) {
     const userRoster = rostersData.find(
       (roster: any) => roster.owner_id === userId
     );
-    if (!userRoster) {
+
+    // Handle case where roster exists but has no players (new league)
+    if (!userRoster || !userRoster.players || userRoster.players.length === 0) {
+      console.log(`[RosterSync] No players found for user. Creating empty roster structure for new/pre-draft league.`);
+
+      const emptyRosterData = await createEmptyRosterStructure(sleeper_league_id, sleeper_username);
+
+      if (!emptyRosterData) {
+        return NextResponse.json(
+          { success: false, error: 'Failed to create roster structure for new league.' },
+          { status: 500 }
+        );
+      }
+
+      // Save empty roster structure to database
+      const { data: updatedRow, error: updateError } = await supabase
+        .from('leagues')
+        .update({
+          rosters_json: emptyRosterData,
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq('sleeper_league_id', sleeper_league_id)
+        .eq('user_email', user_email)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Supabase update error:', updateError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to update roster data in the database.' },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json(
-        { success: false, error: 'Roster not found for this user in the league.' },
-        { status: 404 }
+        {
+          message: 'Empty roster structure created for new league',
+          data: updatedRow,
+        },
+        { status: 200 }
       );
     }
 

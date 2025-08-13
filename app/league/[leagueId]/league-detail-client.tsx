@@ -112,15 +112,185 @@ const RosterSection = ({
 export default function LeagueDetailClient({ league }: { league: League }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [isCheckingDraftStatus, setIsCheckingDraftStatus] = useState(false);
+  const [autoSyncMessage, setAutoSyncMessage] = useState<string>('');
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // Auto-detection for post-draft transition
+  useEffect(() => {
+    const checkDraftStatus = async () => {
+      // Only check if league is currently marked as pre-draft
+      if (!league.rosters_json?.isPreDraft) return;
+
+      setIsCheckingDraftStatus(true);
+      setAutoSyncMessage('Checking draft status...');
+
+      try {
+        // Check current league status from Sleeper API
+        const response = await fetch(`https://api.sleeper.app/v1/league/${league.sleeper_league_id}`);
+        if (!response.ok) throw new Error('Failed to fetch league status');
+
+        const sleeperData = await response.json();
+        console.log('League status check:', sleeperData.status);
+
+        // If league is no longer pre_draft, trigger roster sync
+        if (sleeperData.status !== 'pre_draft') {
+          setAutoSyncMessage('Draft detected! Syncing roster...');
+
+          // Trigger roster sync
+          const syncResponse = await fetch('/api/rosters/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sleeper_league_id: league.sleeper_league_id,
+              user_email: league.user_email,
+              sleeper_username: league.sleeper_username,
+            }),
+          });
+
+          if (syncResponse.ok) {
+            setAutoSyncMessage('Roster synced! Refreshing page...');
+            // Refresh the page to show the new roster data
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } else {
+            setAutoSyncMessage('Failed to sync roster. Please try refreshing the page.');
+          }
+        } else {
+          setAutoSyncMessage('');
+        }
+      } catch (error: any) {
+        console.error('Failed to check draft status:', error);
+        setAutoSyncMessage('');
+      } finally {
+        setIsCheckingDraftStatus(false);
+      }
+    };
+
+    // Check immediately when component mounts
+    if (isMounted && league.rosters_json?.isPreDraft) {
+      checkDraftStatus();
+    }
+
+    // Set up periodic checking (every 30 seconds) for pre-draft leagues
+    let intervalId: NodeJS.Timeout | null = null;
+    if (isMounted && league.rosters_json?.isPreDraft) {
+      intervalId = setInterval(checkDraftStatus, 30000); // Check every 30 seconds
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isMounted, league.sleeper_league_id, league.user_email, league.sleeper_username, league.rosters_json?.isPreDraft]);
+
   if (!league.rosters_json) {
     return <LoadingArc />;
   }
 
+  const isPreDraftLeague = league.rosters_json.isPreDraft || false;
+  const rosterSettings = league.rosters_json.rosterSettings || {};
+
+  if (isPreDraftLeague) {
+    return (
+      <div className="min-h-screen bg-black text-white p-4 sm:p-8">
+        <div className="w-full max-w-7xl mx-auto">
+          {/* Back Navigation */}
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center text-white hover:text-gray-300 mb-6 transition-colors"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            <ChevronLeft size={20} className="mr-2" />
+            ← [back to dashboard]
+          </Link>
+
+          {/* Auto-sync status message */}
+          {autoSyncMessage && (
+            <div className="mb-6 bg-blue-900/20 border border-blue-400/40 p-4">
+              <p className="text-blue-400" style={{ fontFamily: 'Consolas, monospace' }}>
+                🔄 {autoSyncMessage}
+              </p>
+            </div>
+          )}
+
+          {/* Header */}
+          <header className="mb-8 border-b border-white pb-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1
+                  className="text-3xl sm:text-4xl font-normal mb-2"
+                  style={{ fontFamily: 'Consolas, monospace' }}
+                >
+                  [{league.league_name}]
+                </h1>
+                <p className="text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
+                  Status: {league.rosters_json.leagueStatus || 'Pre-Draft'}
+                </p>
+                <p className="text-yellow-400 text-sm mt-2" style={{ fontFamily: 'Consolas, monospace' }}>
+                  ⚠️ Draft has not started yet. Monitoring for draft completion...
+                  {isCheckingDraftStatus && ' 🔄'}
+                </p>
+              </div>
+            </div>
+          </header>
+
+          {/* Rest of pre-draft UI ... */}
+          {/* Roster Configuration Display */}
+          <section className="mb-8">
+            <h2
+              className="text-2xl font-normal mb-4"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              [roster configuration]
+            </h2>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {Object.entries(rosterSettings).map(([position, count]) => (
+                <div key={position} className="bg-gray-900 border border-white/20 p-4">
+                  <div className="text-center">
+                    <p className="text-lg font-normal text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+                      {position}
+                    </p>
+                    <p className="text-2xl text-blue-400" style={{ fontFamily: 'Consolas, monospace' }}>
+                      {count}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-gray-900 border border-white/20 p-6">
+              <p className="text-gray-400 text-center" style={{ fontFamily: 'Consolas, monospace' }}>
+                [no players assigned yet - waiting for draft]
+              </p>
+              <p className="text-gray-500 text-sm text-center mt-2" style={{ fontFamily: 'Consolas, monospace' }}>
+                Total roster spots: {league.rosters_json.totalRosterSpots || 'Unknown'}
+              </p>
+            </div>
+          </section>
+
+          {/* Auto-monitoring notification */}
+          <section className="mb-8">
+            <div className="bg-green-900/20 border border-green-400/40 p-6">
+              <p className="text-green-400" style={{ fontFamily: 'Consolas, monospace' }}>
+                🤖 Auto-monitoring enabled
+              </p>
+              <p className="text-gray-300 mt-2" style={{ fontFamily: 'Consolas, monospace' }}>
+                We're automatically checking every 30 seconds for draft completion.
+                Your roster will sync automatically once the draft starts!
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  // Continue with existing logic for leagues with players
   const { starters, roster } = league.rosters_json;
   const starterIds = new Set(starters.map(p => p.id));
   const bench = roster.filter(p => !starterIds.has(p.id));
