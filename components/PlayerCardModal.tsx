@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getPlayerById } from '@/lib/sleeper/fetchAllPlayers';
 import LoadingArc from './LoadingArc';
 import { getStatColorClass, getStatStyle } from '@/lib/performanceColors';
-import { useFetch } from '@/hooks/useFetch';
 
 interface PlayerCardModalProps {
   playerId: string;
