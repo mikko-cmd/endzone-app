@@ -1015,7 +1015,7 @@ export default function DraftAssistant() {
         allPlayers.forEach(player => {
             if (player.sleeper_id) {
                 // Store multiple variations of the name
-                const normalizeStr = (str) => str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
+                const normalizeStr = (str: string) => str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
 
                 map.set(player.name.toLowerCase(), player.sleeper_id);
                 map.set(normalizeStr(player.name), player.sleeper_id);
