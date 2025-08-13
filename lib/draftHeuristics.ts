@@ -115,7 +115,8 @@ export class DraftHeuristics {
             'WR': 0.6, // Moderate scarcity
             'TE': 0.9, // Very scarce after top tier
             'K': 0.1,
-            'DST': 0.1
+            'DST': 0.1,
+            'BPA': 0.5 // Best Player Available default scarcity
         };
 
         const baseScarcity = scarcityFactors[position] || 0.5;
