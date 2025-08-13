@@ -103,7 +103,7 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
 
   // Generate seasons from rookie year to 2024, plus 2025
   const startYear = Math.max(correctRookieYear, 2000); // Don't go before 2000
-  const seasons = [];
+  const seasons: string[] = [];
 
   // Add 2025 first (upcoming season)
   seasons.push('2025');
@@ -136,7 +136,7 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
       } else {
         console.warn(`⚠️ Failed to fetch ${season} game log:`, response.status);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Error fetching ${season} game log:`, error);
     } finally {
       setLoadingSeason(null);

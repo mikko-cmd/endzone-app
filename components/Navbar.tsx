@@ -78,7 +78,7 @@ const NavDropdown = ({
             {isOpen && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-black border border-white shadow-lg z-50">
                     {items.map((item, index) => (
-                        item.disabled === true ? (
+                        ('disabled' in item && item.disabled === true) ? (
                             <div
                                 key={index}
                                 className="px-4 py-2 text-gray-600 text-center border-b border-gray-700"
@@ -171,13 +171,14 @@ export default function Navbar() {
 
     // Modify navItems to dynamically generate My Leagues items
     const getMyLeaguesItems = () => {
-        const items = [];
+        const items: { label: string; href: string; disabled?: boolean }[] = [];
 
         // Add individual leagues
         userLeagues.forEach(league => {
             items.push({
                 label: league.league_name,
-                href: `/league/${league.sleeper_league_id}`
+                href: `/league/${league.sleeper_league_id}`,
+                disabled: false
             });
         });
 
@@ -186,8 +187,8 @@ export default function Navbar() {
             items.push({ label: '───────────', href: '#', disabled: true });
         }
 
-        items.push({ label: 'View All Leagues', href: '/leagues' });
-        items.push({ label: 'Add/Connect League', href: '/leagues/connect' });
+        items.push({ label: 'View All Leagues', href: '/leagues', disabled: false });
+        items.push({ label: 'Add/Connect League', href: '/leagues/connect', disabled: false });
 
         return items;
     };
@@ -197,8 +198,8 @@ export default function Navbar() {
             title: 'Home',
             mainHref: '/dashboard', // Add main page URL
             items: [
-                { label: 'Dashboard', href: '/dashboard' },
-                { label: 'Activity Feed', href: '/dashboard/activity' },
+                { label: 'Dashboard', href: '/dashboard', disabled: false },
+                { label: 'Activity Feed', href: '/dashboard/activity', disabled: false },
             ]
         },
         {
@@ -324,7 +325,7 @@ export default function Navbar() {
                                     </div>
                                     <div className="pl-4 space-y-2">
                                         {navItem.items.map((item, index) => (
-                                            item.disabled === true ? (
+                                            ('disabled' in item && item.disabled === true) ? (
                                                 <div
                                                     key={index}
                                                     className="text-gray-600 text-center"
