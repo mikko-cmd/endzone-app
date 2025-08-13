@@ -109,7 +109,7 @@ export async function getDraftSlotToTeamNameMap(leagueId: string): Promise<Recor
         });
 
         return teamNameMap;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Failed to fetch team names:', error);
         return {};
     }

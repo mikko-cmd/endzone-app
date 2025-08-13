@@ -73,7 +73,7 @@ export interface QBStatus {
 
 class DataAggregator {
   private supabase;
-  
+
   constructor() {
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,9 +84,9 @@ class DataAggregator {
   // Main method to gather all player data for analysis
   async aggregatePlayerData(playerId: string, week?: number): Promise<PlayerAnalysisData> {
     const currentWeek = week || this.getCurrentNFLWeek();
-    
+
     console.log(`🔍 Aggregating data for player ${playerId}, week ${currentWeek}`);
-    
+
     // Get basic player info from our database
     const player = await this.getPlayerInfo(playerId);
     if (!player) {
@@ -154,7 +154,7 @@ class DataAggregator {
       // Try NFLverse data first (most reliable)
       console.log(`📊 Fetching real stats for ${player.name} from NFLverse...`);
       const nflverseStats = await nflverseData.getPlayerSeasonStats(player.name, 2024);
-      
+
       if (nflverseStats) {
         console.log(`✅ Found NFLverse stats for ${player.name}`);
         return {
@@ -189,7 +189,7 @@ class DataAggregator {
       });
 
       return this.parseSeasonStats(response.data, position);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ Failed to get season stats from all sources, using fallback');
       return this.getDefaultSeasonStats();
     }
@@ -207,10 +207,10 @@ class DataAggregator {
       // Try NFLverse game logs first
       console.log(`📋 Fetching real game logs for ${player.name} from NFLverse...`);
       const gameLogs = await nflverseData.getPlayerGameLogs(player.name, 2024);
-      
+
       if (gameLogs && gameLogs.length > 0) {
         console.log(`✅ Found ${gameLogs.length} game logs for ${player.name}`);
-        
+
         // Convert to our format and get recent games
         const recentGames = gameLogs
           .sort((a, b) => b.week - a.week) // Most recent first
@@ -229,7 +229,7 @@ class DataAggregator {
             receiving_tds: log.receiving_tds,
             targets: log.targets
           }));
-        
+
         return recentGames;
       }
 
@@ -246,7 +246,7 @@ class DataAggregator {
       }
 
       return [];
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ Failed to get recent games');
       return [];
     }

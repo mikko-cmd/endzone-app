@@ -35,7 +35,7 @@ async function fetchAllPlayers(): Promise<Players> {
     playersCache = players;
     lastFetchTimestamp = now;
     return players;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching all players:', error);
     if (playersCache) {
       return playersCache;
@@ -48,7 +48,7 @@ export async function getPlayerById(playerId: string): Promise<Player | null> {
   try {
     const players = await fetchAllPlayers();
     return players[playerId] || null;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error getting player by ID ${playerId}:`, error);
     return null;
   }
@@ -150,7 +150,7 @@ export async function getPlayerByName(name: string): Promise<Player | null> {
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error getting player by name ${name}:`, error);
     return null;
   }

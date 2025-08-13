@@ -57,7 +57,7 @@ export class ADPSystem {
             }
 
             console.log(`✅ Loaded expert analysis for ${this.expertAnalysisCache.size} players`);
-        } catch (error) {
+        } catch (error: any) {
             console.warn('⚠️ Failed to load expert analysis:', error);
         }
     }
@@ -186,7 +186,7 @@ export class ADPSystem {
             name: playerName,
             position: adpData?.position || 'Unknown',
             team: adpData?.team || 'Unknown',
-            adpData,
+            adpData: adpData || undefined, // ✅ Convert null to undefined
             marketShare,
             expertAnalysis,
             formatAdjustedADP

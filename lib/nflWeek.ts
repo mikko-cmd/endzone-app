@@ -72,7 +72,7 @@ export interface QBStatus {
 
 class DataAggregator {
   private supabase;
-  
+
   constructor() {
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -83,9 +83,9 @@ class DataAggregator {
   // Main method to gather all player data for analysis
   async aggregatePlayerData(playerId: string, week?: number): Promise<PlayerAnalysisData> {
     const currentWeek = week || this.getCurrentNFLWeek();
-    
+
     console.log(`🔍 Aggregating data for player ${playerId}, week ${currentWeek}`);
-    
+
     // Get basic player info from our database
     const player = await this.getPlayerInfo(playerId);
     if (!player) {
@@ -159,7 +159,7 @@ class DataAggregator {
 
       // Parse the response and extract relevant stats
       return this.parseSeasonStats(response.data, position);
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ Failed to get season stats from API, using fallback');
       return this.getDefaultSeasonStats();
     }
@@ -182,7 +182,7 @@ class DataAggregator {
       }
 
       return [];
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ Failed to get recent games');
       return [];
     }

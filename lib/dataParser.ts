@@ -842,7 +842,7 @@ export class DataParser {
             }
 
             console.log(`✅ Parsed defensive stats for ${Object.keys(this.defenseStatsByAbbr).length} teams`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ Error parsing defensive stats:', error);
         }
     }
@@ -871,7 +871,7 @@ export class DataParser {
                     const content = fs.readFileSync(fullPath, 'utf-8');
                     this.parseExpertAnalysisFile(content, filePath);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error(`Error loading ${filePath}:`, error);
             }
         }

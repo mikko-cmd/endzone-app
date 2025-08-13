@@ -51,7 +51,7 @@ export async function getPlayerNewsByName(
       }));
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error fetching player news for ${name}:`, error);
     return null;
   }

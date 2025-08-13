@@ -101,7 +101,7 @@ export async function getPlayerStatsByName(
       }
     }
     return null; // No player or stats were found.
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error fetching player stats for ${name}:`, error);
     return null;
   }

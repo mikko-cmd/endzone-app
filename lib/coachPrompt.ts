@@ -38,7 +38,7 @@ Return ONLY valid JSON per the provided schema. No extra text before or after.`;
 
         return recommendation;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('🚨 OpenAI error:', error);
         // Deterministic fallback
         return generateFallbackRecommendation(context);
