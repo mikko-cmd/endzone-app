@@ -849,7 +849,8 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
 
         if (playerData) {
           setPlayer(playerData);
-          console.log(`✅ Found player: ${playerData.full_name}`);
+          const safeName = playerData.full_name || playerData.name || 'Unknown Player';
+          console.log(`✅ Found player: ${safeName}`);
         } else {
           setError('Player not found.');
           return;
@@ -857,10 +858,10 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
 
         // Enhanced summary fetching with fallback
         try {
-          console.log(`🚀 Fetching enhanced summary for ${playerData.full_name}...`);
+          console.log(`🚀 Fetching enhanced summary for ${safeName}...`);
 
           // Try enhanced summary API first
-          const enhancedRes = await fetch(`/api/players/enhanced-summary?name=${encodeURIComponent(playerData.full_name)}`);
+          const enhancedRes = await fetch(`/api/players/enhanced-summary?name=${encodeURIComponent(safeName)}`);
 
           if (enhancedRes.ok) {
             const enhancedData = await enhancedRes.json();
@@ -892,7 +893,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
               }
 
               setOutlook(summaryText);
-              console.log(`✅ Loaded enhanced summary for ${playerData.full_name}`);
+              console.log(`✅ Loaded enhanced summary for ${safeName}`);
             } else {
               throw new Error('No enhanced summary available');
             }
@@ -901,7 +902,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
           }
 
         } catch (enhancedError) {
-          console.warn(`⚠️ Enhanced summary failed for ${playerData.full_name}, falling back...`, enhancedError);
+          console.warn(`⚠️ Enhanced summary failed for ${safeName}, falling back...`, enhancedError);
 
           // Fallback to existing outlook API
           try {
@@ -910,17 +911,17 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
               const outlookData = await outlookRes.json();
               if (outlookData.success && outlookData.outlook) {
                 setOutlook(outlookData.outlook);
-                console.log(`✅ Loaded fallback outlook for ${playerData.full_name}`);
+                console.log(`✅ Loaded fallback outlook for ${safeName}`);
               } else {
-                console.warn(`⚠️ No outlook found for ${playerData.full_name}`);
+                console.warn(`⚠️ No outlook found for ${safeName}`);
                 setOutlook('Player summary not yet available. Enhanced AI analysis coming soon!');
               }
             } else {
-              console.warn(`⚠️ Outlook API error for ${playerData.full_name}:`, outlookRes.status);
+              console.warn(`⚠️ Outlook API error for ${safeName}:`, outlookRes.status);
               setOutlook('Unable to load player summary.');
             }
           } catch (outlookError) {
-            console.warn(`⚠️ Failed to fetch outlook for ${playerData.full_name}:`, outlookError);
+            console.warn(`⚠️ Failed to fetch outlook for ${safeName}:`, outlookError);
             setOutlook('Unable to load player summary.');
           }
         }
@@ -934,27 +935,27 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
             if (gameLogData.success && gameLogData.gameLog) {
               setGameLog(gameLogData.gameLog);
               setSeasonGameLogs(prev => ({ ...prev, '2024': gameLogData.gameLog }));
-              console.log(`✅ Loaded ${gameLogData.gameLog.length} games for ${playerData.full_name} (2024)`);
+              console.log(`✅ Loaded ${gameLogData.gameLog.length} games for ${safeName} (2024)`);
             }
           } else {
-            console.warn(`⚠️ Game log API error for ${playerData.full_name}:`, gameLogRes.status);
+            console.warn(`⚠️ Game log API error for ${safeName}:`, gameLogRes.status);
           }
         } catch (gameLogError) {
-          console.warn(`⚠️ Failed to fetch game log for ${playerData.full_name}:`, gameLogError);
+          console.warn(`⚠️ Failed to fetch game log for ${safeName}:`, gameLogError);
         }
 
         // Fetch player news
         try {
-          console.log(`📰 Fetching news for ${playerData.full_name}...`);
+          console.log(`📰 Fetching news for ${safeName}...`);
           const newsRes = await fetch(`/api/player-news/${playerId}`);
 
           if (newsRes.ok) {
             const newsData = await newsRes.json();
             setPlayerNews(newsData);
             console.log('📰 Player news', { playerId, count: newsData.count, lastUpdated: newsData.lastUpdated });
-            console.log(`✅ Loaded ${newsData.count} news articles for ${playerData.full_name}`);
+            console.log(`✅ Loaded ${newsData.count} news articles for ${safeName}`);
           } else {
-            console.warn(`⚠️ Failed to fetch news for ${playerData.full_name}`);
+            console.warn(`⚠️ Failed to fetch news for ${safeName}`);
             setPlayerNews({ news: [], count: 0 });
           }
         } catch (error: any) {
@@ -1020,17 +1021,17 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({
               <img
                 src={`https://sleepercdn.com/content/nfl/players/${playerId}.jpg`}
                 className="h-24 w-24 rounded-full bg-black object-cover border border-white"
-                alt={player.full_name}
+                alt={player?.full_name || player?.name || 'Unknown Player'}
               />
               <div>
-                <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Consolas, monospace' }}>{player.full_name}</h2>
+                <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Consolas, monospace' }}>{player?.full_name || player?.name || 'Unknown Player'}</h2>
                 <p className="text-sm text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
-                  {player.team} • {player.position}
+                  {player?.team} • {player?.position}
                 </p>
                 <div className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'Consolas, monospace' }}>
-                  Age: {player.age} • Height: {player.height ? convertInchesToFeet(player.height) : 'N/A'} • Weight:{' '}
-                  {player.weight} lbs • EXP: {player.years_exp} yrs • College:{' '}
-                  {player.college}
+                  Age: {player?.age} • Height: {player?.height ? convertInchesToFeet(player.height) : 'N/A'} • Weight:{' '}
+                  {player?.weight} lbs • EXP: {player?.years_exp || 0} yrs • College:{' '}
+                  {player?.college}
                 </div>
               </div>
             </div>
