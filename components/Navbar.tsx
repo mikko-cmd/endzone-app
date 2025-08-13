@@ -78,7 +78,7 @@ const NavDropdown = ({
             {isOpen && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-black border border-white shadow-lg z-50">
                     {items.map((item, index) => (
-                        item.disabled ? (
+                        item.disabled === true ? (
                             <div
                                 key={index}
                                 className="px-4 py-2 text-gray-600 text-center border-b border-gray-700"
@@ -324,7 +324,7 @@ export default function Navbar() {
                                     </div>
                                     <div className="pl-4 space-y-2">
                                         {navItem.items.map((item, index) => (
-                                            item.disabled ? (
+                                            item.disabled === true ? (
                                                 <div
                                                     key={index}
                                                     className="text-gray-600 text-center"
