@@ -53,7 +53,7 @@ export default async function PlayersPage() {
       description: 'Search and explore detailed player information, stats, and analysis',
       href: '/research/players/search',
       icon: <Search size={20} />,
-      status: 'coming_soon' as const
+      status: 'available' as const
     },
     {
       title: 'Player Comparisons',

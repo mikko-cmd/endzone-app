@@ -53,29 +53,91 @@ const convertInchesToFeet = (inches: number) => {
   return `${feet}'${remainingInches}"`;
 };
 
-// Add this function to generate 2025 schedule
+const nfl2025Schedule: Record<string, string[]> = {
+  'ARI': ['@NO', 'CAR', '@SF', 'SEA', 'TEN', '@IND', 'GB', 'BYE', '@DAL', '@SEA', 'SF', 'JAX', '@TB', 'LAR', '@HOU', 'ATL', '@CIN', '@LAR'],
+  'ATL': ['TB', '@MIN', '@CAR', 'WSH', 'BYE', 'BUF', '@SF', 'MIA', '@NE', '@IND', 'CAR', '@NO', '@NYJ', 'SEA', '@TB', '@ARI', 'LAR', 'NO'],
+  'BAL': ['@BUF', 'CLE', 'DET', '@KC', 'HOU', 'LAR', 'BYE', 'CHI', '@MIA', '@MIN', '@CLE', 'NYJ', 'CIN', 'PIT', '@CIN', 'NE', '@GB', '@PIT'],
+  'BUF': ['BAL', '@NYJ', 'MIA', 'NO', 'NE', '@ATL', 'BYE', '@CAR', 'KC', '@MIA', 'TB', '@HOU', '@PIT', 'CIN', '@NE', '@CLE', 'PHI', 'NYJ'],
+  'CAR': ['@JAX', '@ARI', 'ATL', '@NE', 'MIA', 'DAL', '@NYJ', 'BUF', '@GB', 'NO', '@ATL', '@SF', 'LAR', 'BYE', '@NO', 'TB', 'SEA', '@TB'],
+  'CHI': ['MIN', '@DET', 'DAL', '@LV', 'BYE', '@WSH', 'NO', '@BAL', '@CIN', 'NYG', '@MIN', 'PIT', '@PHI', '@GB', 'CLE', 'GB', '@SF', 'DET'],
+  'CIN': ['@CLE', 'JAX', '@MIN', '@DEN', 'DET', '@GB', 'PIT', 'NYJ', 'CHI', 'BYE', '@PIT', 'NE', '@BAL', '@BUF', 'BAL', '@MIA', 'ARI', 'CLE'],
+  'CLE': ['CIN', '@BAL', 'GB', '@DET', 'MIN', '@PIT', 'MIA', '@NE', 'BYE', '@NYJ', 'BAL', '@LV', 'SF', 'TEN', '@CHI', 'BUF', 'PIT', '@CIN'],
+  'DAL': ['@PHI', 'NYG', '@CHI', 'GB', '@NYJ', '@CAR', 'WSH', '@DEN', 'ARI', 'BYE', '@LV', 'PHI', 'KC', '@DET', 'MIN', 'LAC', '@WSH', '@NYG'],
+  'DEN': ['TEN', '@IND', '@LAC', 'CIN', '@PHI', '@NYJ', 'NYG', 'DAL', '@HOU', 'LV', 'KC', 'BYE', '@WSH', '@LV', 'GB', 'JAX', '@KC', 'LAC'],
+  'DET': ['@GB', 'CHI', '@BAL', 'CLE', '@CIN', '@KC', 'TB', 'BYE', 'MIN', '@WSH', '@PHI', 'NYG', 'GB', 'DAL', '@LAR', 'PIT', '@MIN', '@CHI'],
+  'GB': ['DET', 'WSH', '@CLE', '@DAL', 'BYE', 'CIN', '@ARI', '@PIT', 'CAR', 'PHI', '@NYG', 'MIN', '@DET', 'CHI', '@DEN', '@CHI', 'BAL', '@MIN'],
+  'HOU': ['@LAR', 'TB', '@JAX', 'TEN', '@BAL', 'BYE', '@SEA', 'SF', 'DEN', 'JAX', '@TEN', 'BUF', '@IND', '@KC', 'ARI', 'LV', '@LAC', 'IND'],
+  'IND': ['MIA', 'DEN', '@TEN', '@LAR', 'LV', 'ARI', '@LAC', 'TEN', '@PIT', 'ATL', 'BYE', '@KC', 'HOU', '@JAX', '@SEA', 'SF', 'JAX', '@HOU'],
+  'JAX': ['CAR', '@CIN', 'HOU', '@SF', 'KC', 'SEA', 'LAR', 'BYE', '@LV', '@HOU', 'LAC', '@ARI', '@TEN', 'IND', 'NYJ', '@DEN', '@IND', 'TEN'],
+  'KC': ['@LAC', 'PHI', '@NYG', 'BAL', '@JAX', 'DET', 'LV', 'WSH', '@BUF', 'BYE', '@DEN', 'IND', '@DAL', 'HOU', 'LAC', '@TEN', 'DEN', '@LV'],
+  'LV': ['@NE', 'LAC', '@WSH', 'CHI', '@IND', 'TEN', '@KC', 'BYE', 'JAX', '@DEN', 'DAL', 'CLE', '@LAC', 'DEN', '@PHI', '@HOU', 'NYG', 'KC'],
+  'LAR': ['HOU', '@TEN', '@PHI', 'IND', 'SF', '@BAL', '@JAX', 'BYE', 'NO', '@SF', 'SEA', 'TB', '@CAR', '@ARI', 'DET', '@SEA', '@ATL', 'ARI'],
+  'LAC': ['KC', '@LV', 'DEN', '@NYG', 'WSH', '@MIA', 'IND', 'MIN', '@TEN', 'PIT', '@JAX', 'BYE', 'LV', 'PHI', '@KC', '@DAL', 'HOU', '@DEN'],
+  'MIA': ['@IND', 'NE', '@BUF', 'NYJ', '@CAR', 'LAC', '@CLE', '@ATL', 'BAL', 'BUF', 'WSH', 'BYE', 'NO', '@NYJ', '@PIT', 'CIN', 'TB', '@NE'],
+  'MIN': ['@CHI', 'ATL', 'CIN', '@PIT', '@CLE', 'BYE', 'PHI', '@LAC', '@DET', 'BAL', 'CHI', '@GB', '@SEA', 'WSH', '@DAL', '@NYG', 'DET', 'GB'],
+  'NE': ['LV', '@MIA', 'PIT', 'CAR', '@BUF', '@NO', '@TEN', 'CLE', 'ATL', '@TB', 'NYJ', '@CIN', 'NYG', 'BYE', 'BUF', '@BAL', '@NYJ', 'MIA'],
+  'NO': ['ARI', 'SF', '@SEA', '@BUF', 'NYG', 'NE', '@CHI', 'TB', '@LAR', '@CAR', 'BYE', 'ATL', '@MIA', '@TB', 'CAR', 'NYJ', '@TEN', '@ATL'],
+  'NYG': ['@WSH', '@DAL', 'KC', 'LAC', '@NO', 'PHI', '@DEN', '@PHI', 'SF', '@CHI', 'GB', '@DET', '@NE', 'BYE', 'WSH', 'MIN', '@LV', 'DAL'],
+  'NYJ': ['PIT', 'BUF', '@TB', '@MIA', 'DAL', 'DEN', 'CAR', '@CIN', 'BYE', 'CLE', '@NE', '@BAL', 'ATL', 'MIA', '@JAX', '@NO', 'NE', '@BUF'],
+  'PHI': ['DAL', '@KC', 'LAR', '@TB', 'DEN', '@NYG', '@MIN', 'NYG', 'BYE', '@GB', 'DET', '@DAL', 'CHI', '@LAC', 'LV', '@WSH', '@BUF', 'WSH'],
+  'PIT': ['@NYJ', 'SEA', '@NE', 'MIN', 'BYE', 'CLE', '@CIN', 'GB', 'IND', '@LAC', 'CIN', '@CHI', 'BUF', '@BAL', 'MIA', '@DET', '@CLE', 'BAL'],
+  'SF': ['@SEA', '@NO', 'ARI', 'JAX', '@LAR', '@TB', 'ATL', '@HOU', '@NYG', 'LAR', '@ARI', 'CAR', '@CLE', 'BYE', 'TEN', '@IND', 'CHI', 'SEA'],
+  'SEA': ['SF', '@PIT', 'NO', '@ARI', 'TB', '@JAX', 'HOU', 'BYE', '@WSH', 'ARI', '@LAR', '@TEN', 'MIN', '@ATL', 'IND', 'LAR', '@CAR', '@SF'],
+  'TB': ['@ATL', '@HOU', 'NYJ', 'PHI', '@SEA', 'SF', '@DET', '@NO', 'BYE', 'NE', '@BUF', '@LAR', 'ARI', 'NO', 'ATL', '@CAR', '@MIA', 'CAR'],
+  'TEN': ['@DEN', 'LAR', 'IND', '@HOU', '@ARI', '@LV', 'NE', '@IND', 'LAC', 'BYE', 'HOU', 'SEA', 'JAX', '@CLE', '@SF', 'KC', 'NO', '@JAX'],
+  'WSH': ['NYG', '@GB', 'LV', '@ATL', '@LAC', 'CHI', '@DAL', '@KC', 'SEA', 'DET', '@MIA', 'BYE', 'DEN', '@MIN', '@NYG', 'PHI', 'DAL', '@PHI']
+};
+
 const generate2025Schedule = (playerTeam: string): ScheduleEntry[] => {
-  // NFL 2025 schedule (simplified - you can make this more accurate later)
   const schedule: ScheduleEntry[] = [];
-  const opponents = [
-    'vs DAL', '@PHI', 'vs NYG', '@WAS', 'vs SF', '@LAR', 'vs SEA', '@ARI',
-    'vs GB', '@DET', 'vs CHI', '@MIN', 'vs ATL', '@NO', 'vs TB', '@CAR', 'vs BUF'
-  ];
+  const teamSchedule = nfl2025Schedule[playerTeam?.toUpperCase()] || [];
 
-  for (let week = 1; week <= 17; week++) {
-    const opponent = opponents[week - 1] || `Week ${week}`;
-    const isHome = !opponent.startsWith('@');
+  // NFL 2025 season starts around September 7, 2025 (Week 1)
+  const seasonStartDate = new Date('2025-09-07');
 
-    schedule.push({
-      week,
-      opponent,
-      date: `2025-${String(Math.floor(week / 4) + 9).padStart(2, '0')}-${String((week % 4) * 7 + 1).padStart(2, '0')}`,
-      // Remove gameTime property
-      isHome
-    });
+  for (let week = 1; week <= 18; week++) {
+    const opponent = teamSchedule[week - 1];
+
+    if (opponent === 'BYE') {
+      schedule.push({
+        week,
+        opponent: 'BYE',
+        date: getWeekDate(seasonStartDate, week),
+        isHome: true // BYE weeks are "home"
+      });
+    } else if (opponent) {
+      const isHome = !opponent.startsWith('@');
+      const opponentTeam = opponent.replace('@', '');
+
+      schedule.push({
+        week,
+        opponent: isHome ? `vs ${opponentTeam}` : `@ ${opponentTeam}`,
+        date: getWeekDate(seasonStartDate, week),
+        isHome
+      });
+    } else {
+      // Fallback for unknown opponents
+      schedule.push({
+        week,
+        opponent: `Week ${week}`,
+        date: getWeekDate(seasonStartDate, week),
+        isHome: true
+      });
+    }
   }
 
   return schedule;
+};
+
+// Helper function to calculate game dates
+const getWeekDate = (seasonStart: Date, week: number): string => {
+  const gameDate = new Date(seasonStart);
+  gameDate.setDate(seasonStart.getDate() + ((week - 1) * 7));
+
+  return gameDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
 };
 
 const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, seasonGameLogs, setSeasonGameLogs }: {
