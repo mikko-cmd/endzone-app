@@ -227,7 +227,7 @@ export default function SnakeDraftBoard({
     };
 
     return (
-        <div className="w-full relative">
+        <div className="w-full relative pb-96">
             {/* Claim Buttons - Hidden when drafting or in live mode */}
             {!isDrafting && mode === 'mock' && (
                 <div className="grid mb-1"
@@ -288,7 +288,7 @@ export default function SnakeDraftBoard({
             </div>
 
             {/* Draft Grid */}
-            <div className="space-y-1">
+            <div className="space-y-1 pb-64">
                 {gridData.map((roundData, roundIndex) => (
                     <div key={roundIndex}>
                         {/* Round Label */}

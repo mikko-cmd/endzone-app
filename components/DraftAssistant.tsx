@@ -144,6 +144,13 @@ const assignPlayerToRoster = (player: Player, currentRoster: MyRoster): MyRoster
     return updated;
 };
 
+// Each CPU team gets slight tendencies
+const teamPersonalities = {
+    1: { riskTolerance: 0.8, rbHeavy: true },     // Conservative, RB-focused
+    2: { riskTolerance: 1.2, wrHeavy: true },     // Aggressive, WR-focused
+    // ...
+};
+
 export default function DraftAssistant() {
     // Mode and basic settings
     const [mode, setMode] = useState<'live' | 'mock'>('mock');
@@ -249,7 +256,12 @@ export default function DraftAssistant() {
             }
         }
 
-        return filtered;
+        // Sort by pprRank (ascending), with fallback for missing ranks
+        return filtered.sort((a, b) => {
+            const rankA = a.pprRank || 999;
+            const rankB = b.pprRank || 999;
+            return rankA - rankB;
+        });
     }, [availablePlayers, searchQuery, selectedPosition]);
 
     // Get team from pick number (snake order)
@@ -338,7 +350,7 @@ export default function DraftAssistant() {
         return needs;
     }, [cpuRosters, leagueSize]);
 
-    // WORKFLOW STEP 2: CPU Pick Logic - FIXED to use current data
+    // Enhanced CPU Pick Logic
     const executeCPUPick = useCallback((teamNumber: number) => {
         const currentPick = currentPickRef.current;
         log(`🤖 CPU Team ${teamNumber} executing pick ${currentPick}...`);
@@ -359,30 +371,186 @@ export default function DraftAssistant() {
             return null;
         }
 
-        // Get team needs and filter players
+        // Get team needs and available players
         const needs = analyzeCPUTeamNeeds(teamNumber);
-        const topAvailable = availablePlayers
+
+        // PREVENT DUPLICATE PREMIUM POSITIONS - Check current roster
+        const currentRoster = cpuRosters[teamNumber];
+        const hasQB = currentRoster?.QB.length > 0;
+        const hasTE = currentRoster?.TE.length > 0;
+        const hasMinRB = currentRoster?.RB.length >= 2; // Need at least 2 RBs
+        const hasMinWR = currentRoster?.WR.length >= 2; // Need at least 2 WRs
+
+        // Filter out positions we shouldn't draft again until core is filled
+        let topAvailable = availablePlayers
             .filter(p => p.adp && p.adp < 200)
             .sort((a, b) => (a.adp || 999) - (b.adp || 999))
-            .slice(0, 5);
+            .slice(0, 8);
 
-        log(`🎲 CPU top 5:`, topAvailable.map(p => `${p.name} (${p.position}, ADP: ${p.adp})`));
+        if (topAvailable.length === 0) return null;
 
-        // Pick based on positional needs if possible
-        let selectedPlayer = topAvailable.find(p => needs.includes(p.position));
 
-        // If no positional needs met, take best available
-        if (!selectedPlayer) {
-            selectedPlayer = topAvailable[0];
+
+        // Check for Brock Bowers
+        const brockBowers = topAvailable.find(p => p.name.includes('Brock Bowers'));
+        if (brockBowers) {
+            let bowersChance = 0;
+            if (currentPick === 14) bowersChance = 0.15;
+            else if (currentPick >= 15 && currentPick <= 16) bowersChance = 0.30;
+            else if (currentPick >= 17 && currentPick <= 18) bowersChance = 0.45;
+            else if (currentPick >= 19 && currentPick <= 20) bowersChance = 0.60;
+            else if (currentPick >= 21 && currentPick <= 22) bowersChance = 0.70;
+            else if (currentPick >= 23 && currentPick <= 25) bowersChance = 0.80;
+            else if (currentPick >= 26) bowersChance = 0.95;
+
+            if (currentPick < 14) {
+                // TOO EARLY - Remove Bowers from consideration
+                topAvailable.splice(topAvailable.indexOf(brockBowers), 1);
+                log(`�� BLOCKED: Brock Bowers too early at pick ${currentPick} (min pick 14)`);
+            } else if (Math.random() < bowersChance) {
+                log(`🎯 HARDCODED: Brock Bowers selected at pick ${currentPick} (${Math.round(bowersChance * 100)}% chance)`);
+                return brockBowers;
+            }
         }
 
-        if (selectedPlayer) {
-            log(`✅ CPU Team ${teamNumber} selects: ${selectedPlayer.name}`);
-            return selectedPlayer;
+        // Check for Trey McBride
+        const treyMcbride = topAvailable.find(p => p.name.includes('Trey McBride'));
+        if (treyMcbride) {
+            let mcbrideChance = 0;
+            if (currentPick === 23) mcbrideChance = 0.15;
+            else if (currentPick >= 24 && currentPick <= 26) mcbrideChance = 0.25;
+            else if (currentPick >= 27 && currentPick <= 29) mcbrideChance = 0.35;
+            else if (currentPick >= 30 && currentPick <= 33) mcbrideChance = 0.45;
+            else if (currentPick >= 34 && currentPick <= 37) mcbrideChance = 0.55;
+            else if (currentPick >= 38 && currentPick <= 40) mcbrideChance = 0.75;
+            else if (currentPick >= 41) mcbrideChance = 0.95;
+
+            if (currentPick < 23) {
+                // TOO EARLY - Remove McBride from consideration
+                topAvailable.splice(topAvailable.indexOf(treyMcbride), 1);
+                log(`🚫 BLOCKED: Trey McBride too early at pick ${currentPick} (min pick 23)`);
+            } else if (Math.random() < mcbrideChance) {
+                log(`🎯 HARDCODED: Trey McBride selected at pick ${currentPick} (${Math.round(mcbrideChance * 100)}% chance)`);
+                return treyMcbride;
+            }
+        }
+
+        // Check for George Kittle
+        const georgeKittle = topAvailable.find(p => p.name.includes('George Kittle'));
+        if (georgeKittle) {
+            let kittleChance = 0;
+            if (currentPick >= 31 && currentPick <= 33) kittleChance = 0.15;
+            else if (currentPick >= 34 && currentPick <= 36) kittleChance = 0.25;
+            else if (currentPick >= 37 && currentPick <= 39) kittleChance = 0.40;
+            else if (currentPick >= 40 && currentPick <= 42) kittleChance = 0.66;
+            else if (currentPick >= 43 && currentPick <= 45) kittleChance = 0.85;
+            else if (currentPick >= 46) kittleChance = 0.95;
+
+            if (currentPick < 31) {
+                // TOO EARLY - Remove Kittle from consideration
+                topAvailable.splice(topAvailable.indexOf(georgeKittle), 1);
+                log(`🚫 BLOCKED: George Kittle too early at pick ${currentPick} (min pick 31)`);
+            } else if (Math.random() < kittleChance) {
+                log(`🎯 HARDCODED: George Kittle selected at pick ${currentPick} (${Math.round(kittleChance * 100)}% chance)`);
+                return georgeKittle;
+            }
+        }
+
+        // If no elite TE was selected, continue with normal logic
+        // ... rest of existing candidate selection logic
+
+        // Create weighted selection pools
+        let finalCandidates = [];
+
+        // 1. POSITIONAL NEED BONUS (if team has clear needs)
+        const needCandidates = topAvailable.filter(p => needs.includes(p.position));
+
+        // 2. VALUE OVERRIDE - Elite players can compete even if not a need
+        const round = Math.ceil(currentPickRef.current / leagueSize);
+
+
+        if (needCandidates.length > 0) {
+            // Start with positional needs
+            finalCandidates = needCandidates.slice(0, 3);
+
+            // Add elite value players who might be falling
+            const valueOverrides = topAvailable.filter(p => {
+                const isEliteValue = p.adp && p.adp <= currentPick - 2; // Player falling 2+ picks
+                const isNotNeed = !needs.includes(p.position);
+                return isEliteValue && isNotNeed;
+            });
+
+            if (valueOverrides.length > 0) {
+                finalCandidates.push(valueOverrides[0]); // Add best value override
+                log(`💎 Value override candidate: ${valueOverrides[0].name} (ADP: ${valueOverrides[0].adp}, Current pick: ${currentPick})`);
+            }
+
+            // Fill remaining slots with best available
+            const remaining = topAvailable.filter(p => !finalCandidates.includes(p)).slice(0, 1);
+            finalCandidates.push(...remaining);
         } else {
-            log('❌ CPU: No suitable players found');
-            return null;
+            // No clear needs - best available with slight variance
+            finalCandidates = topAvailable.slice(0, 5);
         }
+
+        // Ensure we don't exceed 5 candidates
+        finalCandidates = finalCandidates.slice(0, 5);
+
+        // 2. CALCULATE DYNAMIC WEIGHTS based on ADP proximity
+        const bestADP = finalCandidates[0].adp;
+        const weights = finalCandidates.map((player, index) => {
+            const adpGap = player.adp - bestADP;
+
+            // Base weight starts high and decreases
+            let weight = 100 - (index * 20); // 100, 80, 60, 40, 20
+
+            // ADP proximity bonus (closer ADP = higher weight)
+            if (adpGap <= 3) weight += 20;      // Very close tier
+            else if (adpGap <= 6) weight += 10; // Close tier
+            else if (adpGap <= 12) weight += 5; // Same round tier
+
+            // Round-based variance (early picks more predictable)
+            const round = Math.ceil(currentPickRef.current / leagueSize);
+            if (round === 1) {
+                // Round 1: VERY predictable, elite players shouldn't fall
+                if (index === 0 && player.adp <= 6) {
+                    weight *= 3.0; // Massive boost for top 6 ADP players in round 1
+                } else {
+                    weight *= 1.5; // Still boost first option significantly
+                }
+            } else if (round === 2) {
+                weight *= 1.3; // Round 2 still quite predictable
+            } else if (round <= 3) {
+                weight *= 1.2; // Early rounds more consensus
+            } else if (round >= 10) {
+                weight *= 0.8; // Late rounds more chaos
+            }
+
+            return Math.max(weight, 10); // Minimum 10% chance
+        });
+
+        // 3. WEIGHTED RANDOM SELECTION
+        const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+        const random = Math.random() * totalWeight;
+
+        let runningWeight = 0;
+        for (let i = 0; i < finalCandidates.length; i++) {
+            runningWeight += weights[i];
+            if (random <= runningWeight) {
+                const selected = finalCandidates[i];
+                log(`🎲 CPU Team ${teamNumber} weighted selection:`, {
+                    player: selected.name,
+                    position: selected.position,
+                    adp: selected.adp,
+                    weight: `${Math.round(weights[i] / totalWeight * 100)}%`,
+                    candidates: finalCandidates.map(p => p.name)
+                });
+                return selected;
+            }
+        }
+
+        // Fallback to first candidate
+        return finalCandidates[0];
     }, [analyzeCPUTeamNeeds]);
 
     // WORKFLOW STEP 3: Core Draft Function - handles all picks
@@ -1512,7 +1680,39 @@ export default function DraftAssistant() {
                                                 </div>
 
                                                 <div className="col-span-4">
-                                                    <div className={`font-medium ${getPositionColor(player.position)}`}>{player.name}</div>
+                                                    <div
+                                                        className={`font-medium ${getPositionColor(player.position)} cursor-pointer hover:underline`}
+                                                        onClick={async () => {
+                                                            console.log('Opening player card for:', player);
+
+                                                            if (player.sleeper_id) {
+                                                                setSelectedPlayerForModal(player.sleeper_id);
+                                                                return;
+                                                            }
+
+                                                            // Fallback: Search Sleeper's player database by name
+                                                            try {
+                                                                const { getPlayerByName } = await import('@/lib/sleeper/fetchAllPlayers');
+
+                                                                // Try to find the player by name in Sleeper's database
+                                                                const sleeperPlayer = await getPlayerByName(player.name);
+
+                                                                if (sleeperPlayer?.player_id) {
+                                                                    console.log('✅ Found sleeper player:', sleeperPlayer);
+                                                                    setSelectedPlayerForModal(sleeperPlayer.player_id);
+                                                                } else {
+                                                                    console.warn('❌ Player not found in Sleeper database:', player.name);
+                                                                    alert(`Player "${player.name}" not found in Sleeper database. The name might be formatted differently or the player might not be in Sleeper's database.`);
+                                                                }
+                                                            } catch (error) {
+                                                                console.error('Error looking up player:', error);
+                                                                alert(`Error looking up player "${player.name}"`);
+                                                            }
+                                                        }}
+                                                        title="Click to view player details"
+                                                    >
+                                                        {player.name}
+                                                    </div>
                                                     <div className={`text-xs ${getPositionColor(player.position)}`}>
                                                         {player.position} • {player.team}
                                                     </div>

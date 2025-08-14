@@ -25,10 +25,10 @@ const POSITION_BENCHMARKS: Record<string, Record<string, [number, number, number
         rushing_yards: [40, 80, 120],      // 40-80-120 rushing yards
         rushing_tds: [0, 1, 2],            // 0-1-2 rushing TDs
         carries: [10, 18, 25],             // 10-18-25 carries
-        receptions: [2, 4, 7],             // 2-4-7 receptions
-        receiving_yards: [15, 35, 60],     // 15-35-60 receiving yards
-        receiving_tds: [0, 0, 1],          // 0-0-1 receiving TDs
-        targets: [3, 6, 10],               // 3-6-10 targets
+        receptions: [1, 3, 4],             // 1-3-4 receptions (RB-specific: 4+ is green, 3 is yellow, 1-2 is red)
+        receiving_yards: [10, 20, 30],     // 10-20-30 receiving yards (RB-specific: 30+ is green, 10-29 is yellow, <10 is red)
+        receiving_tds: [0, 0, 1],          // 0-0-1 receiving TDs (unchanged)
+        targets: [2, 3, 5],                // 2-3-5 targets (RB-specific: 5+ is green, 3-4 is yellow, 1-2 is red)
         fantasy_points: [8, 15, 22],       // 8-15-22 fantasy points
         fumbles: [0, 0, 1],                // 0-0-1 fumbles
         yards_per_carry: [3.5, 4.5, 5.5], // 3.5-4.5-5.5 yards per carry

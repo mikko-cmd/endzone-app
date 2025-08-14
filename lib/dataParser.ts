@@ -264,27 +264,49 @@ export class DataParser {
                     const columns = this.parseCSVLine(line);
 
                     if (columns.length >= 6) {
-                        const redZoneEntry: RedZoneData = {
-                            name: columns[0],
-                            team: columns[1],
-                            position: pos.toUpperCase(),
-                            rzAttempts: parseInt(columns[2]) || 0,
-                            rzAttPercent: parseFloat(columns[3]?.replace('%', '')) || 0,
-                            rzTouchdowns: parseInt(columns[4]) || 0,
-                            rzTdPercent: parseFloat(columns[5]?.replace('%', '')) || 0,
-                            teamTdPercent: parseFloat(columns[6]?.replace('%', '')) || 0,
-                        };
+                        let redZoneEntry: RedZoneData;
 
-                        // Goal line data (if available - columns 7-11)
-                        if (columns.length >= 12) {
-                            redZoneEntry.glAttempts = parseInt(columns[7]) || 0;
-                            redZoneEntry.glAttPercent = parseFloat(columns[8]?.replace('%', '')) || 0;
-                            redZoneEntry.glTouchdowns = parseInt(columns[9]) || 0;
-                            redZoneEntry.glTdPercent = parseFloat(columns[10]?.replace('%', '')) || 0;
-                            redZoneEntry.glTeamPercent = parseFloat(columns[11]?.replace('%', '')) || 0;
+                        if (pos === 'qb') {
+                            // QB: columns 0-1 = Name,Team; columns 2-7 = ATT,ATT%,CMP,CMP%,TDS,TD% (red zone)
+                            redZoneEntry = {
+                                name: columns[0],
+                                team: columns[1],
+                                position: 'QB',
+                                rzAttempts: parseInt(columns[2]) || 0,        // ATT
+                                rzAttPercent: parseFloat(columns[3]?.replace('%', '')) || 0,  // ATT%
+                                rzTouchdowns: parseInt(columns[6]) || 0,      // TDS
+                                rzTdPercent: parseFloat(columns[7]?.replace('%', '')) || 0,   // TD%
+                                teamTdPercent: 0 // Not available in QB data
+                            };
+                        } else if (pos === 'rb') {
+                            // RB: columns 0-1 = Name,Team; columns 2-6 = ATT,ATT%,TDS,TD%,TEAM%
+                            redZoneEntry = {
+                                name: columns[0],
+                                team: columns[1],
+                                position: 'RB',
+                                rzAttempts: parseInt(columns[2]) || 0,        // ATT
+                                rzAttPercent: parseFloat(columns[3]?.replace('%', '')) || 0,  // ATT%
+                                rzTouchdowns: parseInt(columns[4]) || 0,      // TDS ← CHANGE from columns[6]
+                                rzTdPercent: parseFloat(columns[5]?.replace('%', '')) || 0,   // TD% ← CHANGE from columns[7]
+                                teamTdPercent: parseFloat(columns[6]?.replace('%', '')) || 0  // TEAM% ← ADD this line
+                            };
+                        } else if (pos === 'wr') {
+                            // WR/TE: columns 0-1 = Name,Team; columns 2-8 = TGT,TGT%,REC,REC%,CATCH%,TDS,TD% (red zone)
+                            redZoneEntry = {
+                                name: columns[0],
+                                team: columns[1],
+                                position: columns[2] ? 'WR' : 'WR', // Will be overridden in getRedZoneData for TEs
+                                rzAttempts: parseInt(columns[2]) || 0,        // TGT (targets)
+                                rzAttPercent: parseFloat(columns[3]?.replace('%', '')) || 0,  // TGT%
+                                rzTouchdowns: parseInt(columns[7]) || 0,      // TDS
+                                rzTdPercent: parseFloat(columns[8]?.replace('%', '')) || 0,   // TD%
+                                teamTdPercent: 0 // Calculate if needed
+                            };
                         }
 
-                        data.push(redZoneEntry);
+                        if (redZoneEntry) {
+                            data.push(redZoneEntry);
+                        }
                     }
                 }
 
@@ -522,7 +544,8 @@ export class DataParser {
                     if (columns.length < 19) return;
 
                     const scheduleTeam = columns[0].trim();
-                    if (scheduleTeam !== team) return;
+                    const normalizedTeam = this.normalizeTeamName(team);
+                    if (scheduleTeam !== normalizedTeam) return;
 
                     const matchupStr = columns[week]?.trim();
                     if (!matchupStr) return;
@@ -554,7 +577,8 @@ export class DataParser {
         }
 
         // Find the matchup for this team and week
-        const matchup = this.scheduleData.find(s => s.team === team && s.week === week);
+        const normalizedTeam = team === 'WAS' ? 'WSH' : team;
+        const matchup = this.scheduleData.find(s => s.team === normalizedTeam && s.week === week);
 
         if (!matchup) {
             return {
@@ -626,18 +650,29 @@ export class DataParser {
         const pos = position?.toLowerCase();
         let dataset: RedZoneData[] = [];
 
-        if (pos === 'rb') dataset = this.redZoneRB;
-        else if (pos === 'wr') dataset = this.redZoneWR;
-        else if (pos === 'qb') dataset = this.redZoneQB;
-        else {
+        if (pos === 'rb') {
+            dataset = this.redZoneRB;
+        } else if (pos === 'wr' || pos === 'te') {
+            // Both WRs and TEs use the WR dataset
+            dataset = this.redZoneWR;
+        } else if (pos === 'qb') {
+            dataset = this.redZoneQB;
+        } else {
             // Search all positions
             dataset = [...this.redZoneRB, ...this.redZoneWR, ...this.redZoneQB];
         }
 
-        return dataset.find(player =>
+        const foundPlayer = dataset.find(player =>
             player.name.toLowerCase().includes(playerName.toLowerCase()) ||
             playerName.toLowerCase().includes(player.name.toLowerCase())
         );
+
+        // Override position for TEs when found in WR dataset
+        if (foundPlayer && pos === 'te') {
+            return { ...foundPlayer, position: 'TE' };
+        }
+
+        return foundPlayer;
     }
 
     getCoachingChange(team: string): CoachingChange | undefined {
@@ -933,6 +968,15 @@ export class DataParser {
      */
     async parseMarketShareRB(): Promise<MarketShareData[]> {
         return this.parseRBMarketShare();
+    }
+
+    // Add this function at the top of the DataParser class
+    private normalizeTeamName(team: string): string {
+        const teamMap: Record<string, string> = {
+            'WAS': 'WSH', // Washington uses WSH in schedule, WAS in player data
+            // Add other mappings if needed
+        };
+        return teamMap[team] || team;
     }
 }
 
