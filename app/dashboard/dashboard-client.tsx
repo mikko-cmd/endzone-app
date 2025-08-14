@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import { PlusCircle, Users, Brain, Search, Newspaper } from 'lucide-react';
+import ActivityFeed from '@/components/ActivityFeed';
 
 interface RosterData {
   username: string;
@@ -97,7 +98,13 @@ export default function DashboardClient({
 
   const router = useRouter();
   const supabase = createClient();
-  const userEmail = user.email;
+
+  // Debug: Log user object to see what's available
+  console.log('User object:', user);
+  console.log('User metadata:', user.user_metadata);
+
+  // Get first name from user metadata, fallback to email if not available
+  const userDisplayName = user.user_metadata?.first_name || user.email;
 
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -159,7 +166,7 @@ export default function DashboardClient({
             className="text-lg text-gray-400"
             style={{ fontFamily: 'Consolas, monospace' }}
           >
-            welcome back, {userEmail}
+            welcome back, {userDisplayName}
           </p>
         </header>
 
@@ -199,24 +206,8 @@ export default function DashboardClient({
           </div>
         </section>
 
-        {/* Recent Activity Placeholder */}
-        <section className="mb-12">
-          <h2
-            className="text-2xl font-normal mb-6"
-            style={{ fontFamily: 'Consolas, monospace' }}
-          >
-            [recent activity]
-          </h2>
-          <div
-            className="bg-black border border-white/20 p-6"
-            style={{ fontFamily: 'Consolas, monospace' }}
-          >
-            <p className="text-gray-400">activity feed coming soon...</p>
-          </div>
-        </section>
-
         {/* Leagues Section */}
-        <section>
+        <section className="mb-12">
           <div className="flex justify-between items-center mb-6">
             <h2
               className="text-2xl font-normal"
@@ -249,6 +240,17 @@ export default function DashboardClient({
               ))}
             </div>
           )}
+        </section>
+
+        {/* Recent Activity */}
+        <section className="mb-12">
+          <h2
+            className="text-2xl font-normal mb-6"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            [recent activity]
+          </h2>
+          <ActivityFeed />
         </section>
 
         {/* Modal */}

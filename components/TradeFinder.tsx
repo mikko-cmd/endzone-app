@@ -46,6 +46,7 @@ interface TradeProposal {
   fairness_score: number;
   mutual_benefit: number;
   reasoning: string[];
+  fairness_tier: 'fleece' | 'somewhat_fair' | 'very_strict';
 }
 
 interface TradeFinderData {
@@ -69,7 +70,6 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
   const [data, setData] = useState<TradeFinderData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [minFairness, setMinFairness] = useState(0.7);
   const [maxResults, setMaxResults] = useState(10);
 
   const fetchTradeProposals = async () => {
@@ -78,7 +78,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
 
     try {
       const response = await fetch(
-        `/api/league/${leagueId}/trade-suggestions?min_fairness=${minFairness}&max_results=${maxResults}`
+        `/api/league/${leagueId}/trade-suggestions?max_results=${maxResults}`
       );
 
       if (!response.ok) {
@@ -102,7 +102,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
 
   useEffect(() => {
     fetchTradeProposals();
-  }, [leagueId, minFairness, maxResults]);
+  }, [leagueId, maxResults]);
 
   const getFairnessColor = (score: number) => {
     if (score >= 0.9) return 'text-green-400';
@@ -133,44 +133,25 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
       {/* Controls */}
       <div className="bg-black border border-white/20 rounded-none p-4">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center space-x-2">
-            <span
-              className="text-sm text-gray-400"
+          <div>
+            <label
+              className="block text-sm mb-2"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
-              fairness threshold:
-            </span>
-            <select
-              value={minFairness}
-              onChange={(e) => setMinFairness(parseFloat(e.target.value))}
-              className="bg-black border border-white text-white px-3 py-1 rounded-none text-sm"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              <option value={0.6}>60% (loose)</option>
-              <option value={0.7}>70% (balanced)</option>
-              <option value={0.8}>80% (strict)</option>
-              <option value={0.9}>90% (very strict)</option>
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <span
-              className="text-sm text-gray-400"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              max results:
-            </span>
+              max results
+            </label>
             <select
               value={maxResults}
               onChange={(e) => setMaxResults(parseInt(e.target.value))}
-              className="bg-black border border-white text-white px-3 py-1 rounded-none text-sm"
+              className="w-full bg-black border border-white/20 px-3 py-2 text-white"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={15}>15</option>
-              <option value={20}>20</option>
+              <option value={5}>5 trades</option>
+              <option value={10}>10 trades</option>
+              <option value={15}>15 trades</option>
+              <option value={20}>20 trades</option>
             </select>
+            <p className="text-xs text-gray-400 mt-1">focus team (optional)</p>
           </div>
 
           <button
@@ -274,136 +255,4 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                       </div>
                       <div className="text-right">
                         <div
-                          className={`text-lg font-bold ${getFairnessColor(trade.fairness_score)}`}
-                          style={{ fontFamily: 'Consolas, monospace' }}
-                        >
-                          {(trade.fairness_score * 100).toFixed(0)}%
-                        </div>
-                        <div
-                          className="text-xs text-gray-500"
-                          style={{ fontFamily: 'Consolas, monospace' }}
-                        >
-                          fairness
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Trade Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                      {/* Team A */}
-                      <div className="bg-black border border-white/10 p-3">
-                        <div
-                          className="text-sm font-bold text-white mb-2"
-                          style={{ fontFamily: 'Consolas, monospace' }}
-                        >
-                          {trade.team_a.team_name}
-                        </div>
-                        <div className="space-y-2">
-                          <div>
-                            <div className="text-xs text-gray-400">Gives:</div>
-                            {trade.team_a.giving.map(player => (
-                              <div key={player.player_id} className="text-sm text-white">
-                                {player.name} ({player.position})
-                                <span className="text-xs text-gray-400 ml-1">
-                                  {player.trade_value} pts
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-400">Gets:</div>
-                            {trade.team_a.receiving.map(player => (
-                              <div key={player.player_id} className="text-sm text-green-400">
-                                {player.name} ({player.position})
-                                <span className="text-xs text-gray-400 ml-1">
-                                  {player.trade_value} pts
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div
-                            className={`text-sm font-bold ${getValueColor(trade.team_a.net_value)}`}
-                            style={{ fontFamily: 'Consolas, monospace' }}
-                          >
-                            Net: {trade.team_a.net_value > 0 ? '+' : ''}{trade.team_a.net_value}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Arrow */}
-                      <div className="flex items-center justify-center">
-                        <ArrowLeftRight size={24} className="text-gray-400" />
-                      </div>
-
-                      {/* Team B */}
-                      <div className="bg-black border border-white/10 p-3">
-                        <div
-                          className="text-sm font-bold text-white mb-2"
-                          style={{ fontFamily: 'Consolas, monospace' }}
-                        >
-                          {trade.team_b.team_name}
-                        </div>
-                        <div className="space-y-2">
-                          <div>
-                            <div className="text-xs text-gray-400">Gives:</div>
-                            {trade.team_b.giving.map(player => (
-                              <div key={player.player_id} className="text-sm text-white">
-                                {player.name} ({player.position})
-                                <span className="text-xs text-gray-400 ml-1">
-                                  {player.trade_value} pts
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-400">Gets:</div>
-                            {trade.team_b.receiving.map(player => (
-                              <div key={player.player_id} className="text-sm text-green-400">
-                                {player.name} ({player.position})
-                                <span className="text-xs text-gray-400 ml-1">
-                                  {player.trade_value} pts
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div
-                            className={`text-sm font-bold ${getValueColor(trade.team_b.net_value)}`}
-                            style={{ fontFamily: 'Consolas, monospace' }}
-                          >
-                            Net: {trade.team_b.net_value > 0 ? '+' : ''}{trade.team_b.net_value}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Reasoning */}
-                    <div>
-                      <div
-                        className="text-sm font-bold text-white mb-2"
-                        style={{ fontFamily: 'Consolas, monospace' }}
-                      >
-                        [why this trade works]
-                      </div>
-                      <div className="space-y-1">
-                        {trade.reasoning.map((reason, reasonIndex) => (
-                          <div
-                            key={reasonIndex}
-                            className="text-sm text-gray-300 flex items-center"
-                            style={{ fontFamily: 'Consolas, monospace' }}
-                          >
-                            <CheckCircle size={12} className="mr-2 text-green-400" />
-                            {reason}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
+                          className={`

@@ -193,7 +193,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
               [team needs analysis]
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(data.teamNeeds).map(([position, need]) => (
+              {data.team_needs && Object.entries(data.team_needs).map(([position, need]) => (
                 <div key={position} className="text-center">
                   <div
                     className="text-sm text-gray-400"
@@ -215,6 +215,11 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
                   </div>
                 </div>
               ))}
+              {!data.team_needs && (
+                <div className="text-gray-400 text-center col-span-full">
+                  Team needs analysis not available
+                </div>
+              )}
             </div>
           </div>
 
@@ -225,7 +230,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
                 className="text-lg font-normal"
                 style={{ fontFamily: 'Consolas, monospace' }}
               >
-                [top recommendations] ({data.players.length}/{data.totalAvailable} available)
+                [top recommendations] ({data.players?.length || 0}/{data.summary?.total_available || 0} available)
               </h3>
             </div>
 
@@ -310,7 +315,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
             className="text-xs text-gray-500 text-center"
             style={{ fontFamily: 'Consolas, monospace' }}
           >
-            analysis completed in {data.analysis.duration}ms • {data.analysis.rosteredCount} players rostered
+            analysis completed • {data.summary?.total_available || 0} players analyzed
           </div>
         </>
       )}

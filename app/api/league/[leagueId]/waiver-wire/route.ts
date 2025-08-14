@@ -2,6 +2,9 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+// Add imports from trade suggestions
+import axios from 'axios';
+
 interface SleeperPlayer {
     player_id: string;
     full_name?: string;
@@ -23,16 +26,20 @@ interface ADPPlayer {
     'Bye Week'?: string;
 }
 
+// Update WaiverWirePlayer interface to include Endzone Value
 interface WaiverWirePlayer {
     player_id: string;
     name: string;
     position: string;
     team: string;
     adp_rank?: number;
-    waiver_score: number;
+    endzone_value: number; // 🔥 NEW: Use same value system as trades
+    projected_points: number; // 🔥 NEW: Season projection
+    waiver_score: number; // Keep for compatibility
     injury_status?: string;
     bye_week?: number;
     reasons: string[];
+    pickup_priority: 'must_add' | 'strong_add' | 'solid_add' | 'speculative'; // 🔥 NEW: Clear tiers
 }
 
 interface TeamNeeds {
@@ -40,6 +47,14 @@ interface TeamNeeds {
         priority: 'high' | 'medium' | 'low';
         count: number;
     };
+}
+
+// Add interface for league settings
+interface SleeperLeagueSettings {
+    roster_positions: string[];
+    scoring_settings: { [key: string]: number };
+    num_teams: number;
+    playoff_week_start: number;
 }
 
 const waiverWireSchema = z.object({
@@ -92,25 +107,32 @@ export async function GET(
         console.log(`[WaiverWire] Starting analysis for league ${leagueId}`);
         const startTime = Date.now();
 
-        // Fetch all league rosters from Sleeper
-        const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
-        if (!rostersRes.ok) {
-            return NextResponse.json({
-                success: false,
-                error: 'Failed to fetch league rosters'
-            }, { status: 502 });
-        }
-        const rostersData = await rostersRes.json();
+        // Fetch league settings, rosters, and players data in parallel
+        const [leagueRes, rostersRes, playersRes] = await Promise.all([
+            fetch(`https://api.sleeper.app/v1/league/${leagueId}`), // Add league settings fetch
+            fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
+            fetch(`https://api.sleeper.app/v1/players/nfl`)
+        ]);
 
-        // Fetch all NFL players from Sleeper
-        const playersRes = await fetch(`https://api.sleeper.app/v1/players/nfl`);
-        if (!playersRes.ok) {
+        // Check all responses
+        if (!leagueRes.ok || !rostersRes.ok || !playersRes.ok) {
             return NextResponse.json({
                 success: false,
-                error: 'Failed to fetch NFL players'
+                error: 'Failed to fetch league data'
             }, { status: 502 });
         }
-        const playersData: { [id: string]: SleeperPlayer } = await playersRes.json();
+
+        const [leagueSettings, rostersData, playersData] = await Promise.all([
+            leagueRes.json() as Promise<SleeperLeagueSettings>,
+            rostersRes.json(),
+            playersRes.json() as Promise<{ [id: string]: SleeperPlayer }>
+        ]);
+
+        console.log(`[WaiverWire] League roster positions:`, leagueSettings.roster_positions);
+
+        // Determine valid positions based on league settings
+        const validPositions = getValidPositions(leagueSettings.roster_positions);
+        console.log(`[WaiverWire] Valid positions for this league:`, validPositions);
 
         // Get all rostered player IDs
         const rosteredPlayerIds = new Set<string>();
@@ -124,37 +146,67 @@ export async function GET(
 
         console.log(`[WaiverWire] Found ${rosteredPlayerIds.size} rostered players`);
 
-        // Load ADP data
-        const adpData = await loadADPData();
-        console.log(`[WaiverWire] Loaded ${adpData.size} ADP entries`);
-
         // Analyze team needs
         const userRoster = league.rosters_json;
-        const teamNeeds = analyzeTeamNeeds(userRoster);
+        const teamNeeds = analyzeTeamNeeds(userRoster, validPositions);
         console.log(`[WaiverWire] Team needs:`, teamNeeds);
 
         // Filter available players
         const availablePlayers: WaiverWirePlayer[] = [];
 
+        // Load both projections and ADP data
+        const [seasonProjections, adpData] = await Promise.all([
+            getSeasonProjections(),
+            loadADPData()
+        ]);
+
+        console.log(`[WaiverWire] Loaded ${adpData.size} ADP entries and ${Object.keys(seasonProjections).length} projections`);
+
+        // Get all projection values for Endzone Value calculation
+        const allProjectionValues = Object.values(seasonProjections).filter(p => p > 0);
+
+        // Calculate average roster Endzone Value for context
+        let avgRosterEndzone = 500; // Default
+        if (userRoster?.players?.length > 0) {
+            const rosterProjections = userRoster.players
+                .map(id => seasonProjections[playersData[id]?.full_name?.toLowerCase()] || 0)
+                .filter(p => p > 0);
+            if (rosterProjections.length > 0) {
+                const avgProjection = rosterProjections.reduce((sum, p) => sum + p, 0) / rosterProjections.length;
+                avgRosterEndzone = calculateEndzoneValue(avgProjection, allProjectionValues);
+            }
+        }
+
+        // Enhanced player processing
         for (const [playerId, player] of Object.entries(playersData)) {
             // Skip if player is rostered
             if (rosteredPlayerIds.has(playerId)) continue;
 
-            // Skip if player is inactive or not in a relevant position
+            // Skip if player is inactive
             if (!player.active || !player.position) continue;
-            if (!['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(player.position)) continue;
 
-            // Filter by position if specified
+            // 🔥 NEW: Skip if position is not valid for this league format
+            if (!validPositions.includes(player.position)) {
+                continue;
+            }
+
+            // Filter by position if specified (and position is valid)
             if (position !== 'ALL' && player.position !== position) continue;
 
             const playerName = player.full_name || `${player.first_name} ${player.last_name}`;
             const adpInfo = adpData.get(playerName);
+            const projectedPoints = seasonProjections[playerName.toLowerCase()] || 0;
+            const endzoneValue = calculateEndzoneValue(projectedPoints, allProjectionValues);
 
-            // Calculate waiver score
-            const waiverScore = calculateWaiverScore(player, adpInfo, teamNeeds);
+            // Enhanced scoring
+            const { score, priority } = calculateEnhancedWaiverScore(
+                player, endzoneValue, projectedPoints, teamNeeds, avgRosterEndzone
+            );
 
-            // Generate recommendations reasons
-            const reasons = generateReasons(player, adpInfo, teamNeeds);
+            // Enhanced reasons
+            const reasons = generateEnhancedReasons(
+                player, endzoneValue, projectedPoints, teamNeeds, priority
+            );
 
             availablePlayers.push({
                 player_id: playerId,
@@ -162,18 +214,33 @@ export async function GET(
                 position: player.position,
                 team: player.team || 'FA',
                 adp_rank: adpInfo?.rank,
-                waiver_score: waiverScore,
+                endzone_value: endzoneValue,
+                projected_points: projectedPoints,
+                waiver_score: score,
                 injury_status: player.injury_status,
                 bye_week: adpInfo?.byeWeek,
-                reasons
+                reasons,
+                pickup_priority: priority
             });
         }
 
         // Sort by waiver score (highest first)
         availablePlayers.sort((a, b) => b.waiver_score - a.waiver_score);
 
-        // Limit results
-        const results = availablePlayers.slice(0, validation.data.limit);
+        // Group by priority for better display
+        const groupedResults = {
+            must_add: availablePlayers.filter(p => p.pickup_priority === 'must_add').slice(0, 3),
+            strong_add: availablePlayers.filter(p => p.pickup_priority === 'strong_add').slice(0, 5),
+            solid_add: availablePlayers.filter(p => p.pickup_priority === 'solid_add').slice(0, 10),
+            speculative: availablePlayers.filter(p => p.pickup_priority === 'speculative').slice(0, 10)
+        };
+
+        const results = [
+            ...groupedResults.must_add,
+            ...groupedResults.strong_add,
+            ...groupedResults.solid_add,
+            ...groupedResults.speculative
+        ].slice(0, validation.data.limit);
 
         const duration = Date.now() - startTime;
         console.log(`[WaiverWire] Analysis completed in ${duration}ms, returning ${results.length} players`);
@@ -182,13 +249,16 @@ export async function GET(
             success: true,
             data: {
                 players: results,
-                teamNeeds,
-                totalAvailable: availablePlayers.length,
-                analysis: {
-                    duration,
-                    rosteredCount: rosteredPlayerIds.size,
-                    filterApplied: position
-                }
+                summary: {
+                    total_available: availablePlayers.length,
+                    must_add: groupedResults.must_add.length,
+                    strong_add: groupedResults.strong_add.length,
+                    solid_add: groupedResults.solid_add.length,
+                    speculative: groupedResults.speculative.length,
+                    avg_roster_endzone: avgRosterEndzone
+                },
+                team_needs: teamNeeds,
+                methodology: 'endzone_value_with_projections'
             }
         });
 
@@ -239,137 +309,252 @@ async function loadADPData(): Promise<Map<string, { rank: number; byeWeek?: numb
     return adpMap;
 }
 
-function analyzeTeamNeeds(roster: any): TeamNeeds {
-    const needs: TeamNeeds = {
-        QB: { priority: 'low', count: 0 },
-        RB: { priority: 'low', count: 0 },
-        WR: { priority: 'low', count: 0 },
-        TE: { priority: 'low', count: 0 }
-    };
+// Add function to get season projections (same as trade suggestions)
+async function getSeasonProjections(): Promise<{ [playerName: string]: number }> {
+    try {
+        console.log('[Waiver Wire] Fetching 2025 season projections...');
 
-    if (!roster?.roster) return needs;
+        const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+        const RAPIDAPI_HOST = 'tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com';
 
-    // Count players by position
-    const positionCounts: { [pos: string]: number } = {};
-    roster.roster.forEach((player: any) => {
-        const pos = player.position;
-        if (pos) {
-            positionCounts[pos] = (positionCounts[pos] || 0) + 1;
+        if (!RAPIDAPI_KEY) {
+            console.warn('[Waiver Wire] RAPIDAPI_KEY not configured, using ADP fallback');
+            return {};
         }
-    });
 
-    // Determine needs based on typical roster construction
-    needs.QB.count = positionCounts.QB || 0;
-    needs.QB.priority = needs.QB.count < 2 ? 'medium' : 'low';
+        const response = await axios.get(`https://${RAPIDAPI_HOST}/getNFLProjections`, {
+            params: {
+                archiveSeason: '2025',
+                pointsPerReception: 1,
+                rushTD: 6,
+                receivingTD: 6,
+                passTD: 4
+            },
+            headers: {
+                'x-rapidapi-host': RAPIDAPI_HOST,
+                'x-rapidapi-key': RAPIDAPI_KEY
+            },
+            timeout: 15000
+        });
 
-    needs.RB.count = positionCounts.RB || 0;
-    needs.RB.priority = needs.RB.count < 3 ? 'high' : needs.RB.count < 5 ? 'medium' : 'low';
+        const projections: { [playerName: string]: number } = {};
+        const playerProjections = response.data?.body?.playerProjections || {};
 
-    needs.WR.count = positionCounts.WR || 0;
-    needs.WR.priority = needs.WR.count < 4 ? 'high' : needs.WR.count < 6 ? 'medium' : 'low';
+        Object.keys(playerProjections).forEach(playerId => {
+            const player = playerProjections[playerId];
+            const playerName = player?.longName?.toLowerCase();
+            const pprPoints = parseFloat(player?.fantasyPointsDefault?.PPR || '0');
 
-    needs.TE.count = positionCounts.TE || 0;
-    needs.TE.priority = needs.TE.count < 2 ? 'medium' : 'low';
+            if (playerName && pprPoints > 0) {
+                projections[playerName] = pprPoints;
+            }
+        });
 
-    return needs;
+        console.log(`[Waiver Wire] Loaded projections for ${Object.keys(projections).length} players`);
+        return projections;
+    } catch (error) {
+        console.error('[Waiver Wire] Failed to load projections:', error);
+        return {};
+    }
 }
 
-function calculateWaiverScore(
+// Add function to calculate Endzone Value (same as trade suggestions)
+function calculateEndzoneValue(projectedPoints: number, allProjections: number[]): number {
+    if (projectedPoints <= 0) return 0;
+
+    const validProjections = allProjections.filter(p => p > 0).sort((a, b) => b - a);
+    const playerRank = validProjections.findIndex(p => p <= projectedPoints) + 1;
+
+    return Math.round((validProjections.length - playerRank + 1) / validProjections.length * 1000);
+}
+
+// Enhanced waiver score calculation using Endzone Values
+function calculateEnhancedWaiverScore(
     player: SleeperPlayer,
-    adpInfo: any,
-    teamNeeds: TeamNeeds
-): number {
-    let score = 0;
+    endzoneValue: number,
+    projectedPoints: number,
+    teamNeeds: TeamNeeds,
+    avgRosterEndzone: number = 500
+): { score: number, priority: 'must_add' | 'strong_add' | 'solid_add' | 'speculative' } {
 
-    // Base score from ADP (higher ADP = higher score)
-    if (adpInfo?.rank) {
-        // Convert ADP rank to score (lower rank = higher score)
-        const adpScore = Math.max(0, 300 - adpInfo.rank);
-        score += adpScore;
-    } else {
-        // No ADP data, give moderate score
-        score += 50;
-    }
+    let score = endzoneValue; // Start with Endzone Value as base
 
-    // Position need multiplier
+    // Position need multiplier (much more significant)
     const position = player.position;
     if (position && teamNeeds[position]) {
         const need = teamNeeds[position];
         switch (need.priority) {
             case 'high':
-                score *= 1.5;
+                score *= 1.8; // Higher multiplier for real needs
                 break;
             case 'medium':
-                score *= 1.2;
+                score *= 1.3;
                 break;
             case 'low':
-                score *= 0.8;
+                score *= 0.9;
                 break;
         }
     }
 
-    // Team quality bonus (rough approximation)
-    const goodOffenses = ['BUF', 'KC', 'DAL', 'SF', 'MIA', 'PHI', 'CIN', 'BAL'];
+    // Upgrade potential bonus (unrostered players with high upside)
+    if (endzoneValue > avgRosterEndzone * 0.7) { // 70% of avg roster player
+        score += 100; // Significant bonus for potential starters
+    }
+
+    // Team quality bonus
+    const goodOffenses = ['BUF', 'KC', 'DAL', 'SF', 'MIA', 'PHI', 'CIN', 'BAL', 'DET', 'GB'];
     if (player.team && goodOffenses.includes(player.team)) {
-        score += 20;
+        score += 50;
     }
 
     // Injury penalty
     if (player.injury_status && ['Out', 'IR', 'Doubtful'].includes(player.injury_status)) {
-        score *= 0.3;
+        score *= 0.2; // Harsh penalty for injured players
     } else if (player.injury_status === 'Questionable') {
-        score *= 0.8;
+        score *= 0.7;
     }
 
-    return Math.round(score);
+    // Determine pickup priority based on final score
+    let priority: 'must_add' | 'strong_add' | 'solid_add' | 'speculative';
+    if (score >= 800) priority = 'must_add';
+    else if (score >= 600) priority = 'strong_add';
+    else if (score >= 400) priority = 'solid_add';
+    else priority = 'speculative';
+
+    return { score: Math.round(score), priority };
 }
 
-function generateReasons(
+// Enhanced reasons generation
+function generateEnhancedReasons(
     player: SleeperPlayer,
-    adpInfo: any,
-    teamNeeds: TeamNeeds
+    endzoneValue: number,
+    projectedPoints: number,
+    teamNeeds: TeamNeeds,
+    priority: string
 ): string[] {
     const reasons: string[] = [];
+
+    // Priority-based recommendation
+    switch (priority) {
+        case 'must_add':
+            reasons.push(`🔥 Must Add: ${endzoneValue} EV player available on waivers`);
+            break;
+        case 'strong_add':
+            reasons.push(`⭐ Strong Add: ${endzoneValue} EV with ${projectedPoints.toFixed(1)} projected points`);
+            break;
+        case 'solid_add':
+            reasons.push(`✅ Solid Add: ${endzoneValue} EV depth/upside play`);
+            break;
+        case 'speculative':
+            reasons.push(`💡 Speculative: ${endzoneValue} EV dart throw`);
+            break;
+    }
+
+    // Position need context
     const position = player.position;
+    if (position && teamNeeds[position]?.priority === 'high') {
+        reasons.push(`Addresses ${position} need (${teamNeeds[position].count} currently rostered)`);
+    }
 
-    // ADP-based reasons
-    if (adpInfo?.rank) {
-        if (adpInfo.rank <= 50) {
-            reasons.push(`High draft capital (ADP ${adpInfo.rank})`);
-        } else if (adpInfo.rank <= 100) {
-            reasons.push(`Solid ADP value (ranked ${adpInfo.rank})`);
+    // Value context
+    if (projectedPoints > 0) {
+        const pointsPerGame = projectedPoints / 17;
+        if (pointsPerGame >= 15) {
+            reasons.push(`Elite projection: ${pointsPerGame.toFixed(1)} PPG`);
+        } else if (pointsPerGame >= 10) {
+            reasons.push(`Strong projection: ${pointsPerGame.toFixed(1)} PPG`);
         }
-    }
-
-    // Team need reasons
-    if (position && teamNeeds[position]) {
-        const need = teamNeeds[position];
-        if (need.priority === 'high') {
-            reasons.push(`Addresses high team need at ${position}`);
-        } else if (need.priority === 'medium') {
-            reasons.push(`Provides depth at ${position}`);
-        }
-    }
-
-    // Team quality reasons
-    const goodOffenses = ['BUF', 'KC', 'DAL', 'SF', 'MIA', 'PHI', 'CIN', 'BAL'];
-    if (player.team && goodOffenses.includes(player.team)) {
-        reasons.push(`Plays for high-scoring ${player.team} offense`);
-    }
-
-    // Injury concerns
-    if (player.injury_status) {
-        if (['Out', 'IR'].includes(player.injury_status)) {
-            reasons.push(`Currently injured (${player.injury_status}) - stash candidate`);
-        } else if (player.injury_status === 'Questionable') {
-            reasons.push(`Monitor injury status`);
-        }
-    }
-
-    // Default reason if none found
-    if (reasons.length === 0) {
-        reasons.push('Available free agent option');
     }
 
     return reasons;
+}
+
+// Add helper function to determine valid positions
+function getValidPositions(rosterPositions: string[]): string[] {
+    const validPositions = new Set<string>();
+
+    // Always include core positions
+    validPositions.add('QB');
+    validPositions.add('RB');
+    validPositions.add('WR');
+    validPositions.add('TE');
+
+    // Check if league uses Kickers
+    if (rosterPositions.includes('K')) {
+        validPositions.add('K');
+        console.log(`[WaiverWire] League uses Kickers`);
+    } else {
+        console.log(`[WaiverWire] League does NOT use Kickers - filtering out`);
+    }
+
+    // Check if league uses Defenses
+    if (rosterPositions.includes('DEF')) {
+        validPositions.add('DEF');
+        console.log(`[WaiverWire] League uses Defenses`);
+    } else {
+        console.log(`[WaiverWire] League does NOT use Defenses - filtering out`);
+    }
+
+    return Array.from(validPositions);
+}
+
+// Update the team needs analysis to only consider valid positions
+function analyzeTeamNeeds(roster: any, validPositions: string[]): TeamNeeds {
+    const needs: TeamNeeds = {};
+
+    // Initialize only valid positions
+    validPositions.forEach(pos => {
+        if (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos)) {
+            needs[pos] = { priority: 'low', count: 0 };
+        }
+    });
+
+    if (!roster?.roster) return needs;
+
+    // Count players by position (only valid positions)
+    const positionCounts: { [key: string]: number } = {};
+    validPositions.forEach(pos => {
+        positionCounts[pos] = 0;
+    });
+
+    roster.roster.forEach((player: any) => {
+        const pos = player.position;
+        if (pos && positionCounts[pos] !== undefined) {
+            positionCounts[pos] = (positionCounts[pos] || 0) + 1;
+        }
+    });
+
+    // Set priorities based on counts (only for positions the league actually uses)
+    if (needs.QB) {
+        needs.QB.count = positionCounts.QB || 0;
+        needs.QB.priority = needs.QB.count < 1 ? 'high' : needs.QB.count < 2 ? 'medium' : 'low';
+    }
+
+    if (needs.RB) {
+        needs.RB.count = positionCounts.RB || 0;
+        needs.RB.priority = needs.RB.count < 2 ? 'high' : needs.RB.count < 4 ? 'medium' : 'low';
+    }
+
+    if (needs.WR) {
+        needs.WR.count = positionCounts.WR || 0;
+        needs.WR.priority = needs.WR.count < 3 ? 'high' : needs.WR.count < 5 ? 'medium' : 'low';
+    }
+
+    if (needs.TE) {
+        needs.TE.count = positionCounts.TE || 0;
+        needs.TE.priority = needs.TE.count < 1 ? 'high' : needs.TE.count < 2 ? 'medium' : 'low';
+    }
+
+    // Only analyze K and DEF if the league uses them
+    if (needs.K) {
+        needs.K.count = positionCounts.K || 0;
+        needs.K.priority = needs.K.count < 1 ? 'medium' : 'low';
+    }
+
+    if (needs.DEF) {
+        needs.DEF.count = positionCounts.DEF || 0;
+        needs.DEF.priority = needs.DEF.count < 1 ? 'medium' : 'low';
+    }
+
+    return needs;
 }

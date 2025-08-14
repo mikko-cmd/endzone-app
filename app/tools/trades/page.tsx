@@ -34,6 +34,7 @@ interface TradeProposal {
   fairness_score: number;
   mutual_benefit: number;
   reasoning: string[];
+  fairness_tier: 'fleece' | 'somewhat_fair' | 'very_strict';
 }
 
 interface PlayerValue {
@@ -49,19 +50,16 @@ interface PlayerValue {
   reasons: string[];
 }
 
+// Further simplify TradeSettings interface (remove focus_team)
 interface TradeSettings {
-  min_fairness: number;
   max_results: number;
-  focus_team?: string;
 }
 
 export default function TradeFinderPage() {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<string>('');
   const [settings, setSettings] = useState<TradeSettings>({
-    min_fairness: 0.3, // Start with most permissive setting
-    max_results: 10,
-    focus_team: undefined
+    max_results: 10
   });
   const [loading, setLoading] = useState(false);
   const [trades, setTrades] = useState<TradeProposal[]>([]);
@@ -106,13 +104,8 @@ export default function TradeFinderPage() {
 
     try {
       const params = new URLSearchParams({
-        min_fairness: settings.min_fairness.toString(),
         max_results: settings.max_results.toString(),
       });
-
-      if (settings.focus_team) {
-        params.append('focus_team', settings.focus_team);
-      }
 
       console.log(`Fetching trades with params:`, params.toString());
 
@@ -129,7 +122,7 @@ export default function TradeFinderPage() {
         setTrades(proposals);
 
         if (proposals.length === 0) {
-          setError(`No viable trades found with ${Math.round(settings.min_fairness * 100)}% fairness threshold. Analysis: ${data.data?.total_players_analyzed || 0} players, ${data.data?.team_analyses?.length || 0} teams. Try lowering threshold to 20%.`);
+          setError(`No viable trades found. Analysis: ${data.data?.total_players_analyzed || 0} players, ${data.data?.team_analyses?.length || 0} teams.`);
         }
       } else {
         setError(data.error || 'Failed to generate trade suggestions');
@@ -142,8 +135,8 @@ export default function TradeFinderPage() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return value >= 0 ? `+$${value}` : `-$${Math.abs(value)}`;
+  const formatEndzoneValue = (value: number) => {
+    return value >= 0 ? `+${value} EV` : `-${Math.abs(value)} EV`;
   };
 
   const getFairnessColor = (score: number) => {
@@ -197,30 +190,6 @@ export default function TradeFinderPage() {
                 className="block text-sm mb-2"
                 style={{ fontFamily: 'Consolas, monospace' }}
               >
-                fairness threshold
-              </label>
-              <select
-                value={settings.min_fairness}
-                onChange={(e) => setSettings({ ...settings, min_fairness: parseFloat(e.target.value) })}
-                className="w-full bg-black border border-white/20 px-3 py-2 text-white"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                <option value={0.2}>very loose (20%)</option>
-                <option value={0.3}>loose (30%)</option>
-                <option value={0.4}>relaxed (40%)</option>
-                <option value={0.5}>balanced (50%)</option>
-                <option value={0.6}>fair (60%)</option>
-                <option value={0.7}>strict (70%)</option>
-                <option value={0.8}>very strict (80%)</option>
-              </select>
-              <p className="text-xs text-gray-400 mt-1">lower = more trade options</p>
-            </div>
-
-            <div>
-              <label
-                className="block text-sm mb-2"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
                 max results
               </label>
               <select
@@ -234,25 +203,6 @@ export default function TradeFinderPage() {
                 <option value={15}>15 trades</option>
                 <option value={20}>20 trades</option>
               </select>
-            </div>
-
-            <div>
-              <label
-                className="block text-sm mb-2"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                focus team (optional)
-              </label>
-              <select
-                value={settings.focus_team || ''}
-                onChange={(e) => setSettings({ ...settings, focus_team: e.target.value || undefined })}
-                className="w-full bg-black border border-white/20 px-3 py-2 text-white"
-                style={{ fontFamily: 'Consolas, monospace' }}
-              >
-                <option value="">all teams</option>
-                {/* Will populate with team names once league is selected */}
-              </select>
-              <p className="text-xs text-gray-400 mt-1">trades involving this team</p>
             </div>
           </div>
         </div>
@@ -321,8 +271,8 @@ export default function TradeFinderPage() {
                       key={league.sleeper_league_id}
                       onClick={() => setSelectedLeague(league.sleeper_league_id)}
                       className={`p-4 border transition-all text-left ${selectedLeague === league.sleeper_league_id
-                          ? 'border-white bg-white/10'
-                          : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+                        ? 'border-white bg-white/10'
+                        : 'border-white/20 hover:border-white/40 hover:bg-white/5'
                         }`}
                       style={{ fontFamily: 'Consolas, monospace' }}
                     >
@@ -404,7 +354,6 @@ export default function TradeFinderPage() {
             </h4>
             <div className="text-sm space-y-1">
               <p>Selected League: {selectedLeague}</p>
-              <p>Fairness Threshold: {Math.round(settings.min_fairness * 100)}%</p>
               <p>Max Results: {settings.max_results}</p>
               <p>Check browser console for detailed API response</p>
             </div>
@@ -461,7 +410,7 @@ export default function TradeFinderPage() {
                       {trade.team_a.giving.map(player => (
                         <div key={player.player_id} className="flex justify-between items-center py-1">
                           <span>{player.name} ({player.position})</span>
-                          <span className="text-green-400">${player.trade_value}</span>
+                          <span className="text-green-400">{player.trade_value} EV</span>
                         </div>
                       ))}
                     </div>
@@ -471,7 +420,7 @@ export default function TradeFinderPage() {
                       {trade.team_a.receiving.map(player => (
                         <div key={player.player_id} className="flex justify-between items-center py-1">
                           <span>{player.name} ({player.position})</span>
-                          <span className="text-green-400">${player.trade_value}</span>
+                          <span className="text-green-400">{player.trade_value} EV</span>
                         </div>
                       ))}
                     </div>
@@ -480,7 +429,7 @@ export default function TradeFinderPage() {
                       <span
                         className={`font-medium ${trade.team_a.net_value >= 0 ? 'text-green-400' : 'text-red-400'}`}
                       >
-                        net: {formatCurrency(trade.team_a.net_value)}
+                        net: {formatEndzoneValue(trade.team_a.net_value)}
                       </span>
                     </div>
                   </div>
@@ -499,7 +448,7 @@ export default function TradeFinderPage() {
                       {trade.team_b.giving.map(player => (
                         <div key={player.player_id} className="flex justify-between items-center py-1">
                           <span>{player.name} ({player.position})</span>
-                          <span className="text-green-400">${player.trade_value}</span>
+                          <span className="text-green-400">{player.trade_value} EV</span>
                         </div>
                       ))}
                     </div>
@@ -509,7 +458,7 @@ export default function TradeFinderPage() {
                       {trade.team_b.receiving.map(player => (
                         <div key={player.player_id} className="flex justify-between items-center py-1">
                           <span>{player.name} ({player.position})</span>
-                          <span className="text-green-400">${player.trade_value}</span>
+                          <span className="text-green-400">{player.trade_value} EV</span>
                         </div>
                       ))}
                     </div>
@@ -518,7 +467,7 @@ export default function TradeFinderPage() {
                       <span
                         className={`font-medium ${trade.team_b.net_value >= 0 ? 'text-green-400' : 'text-red-400'}`}
                       >
-                        net: {formatCurrency(trade.team_b.net_value)}
+                        net: {formatEndzoneValue(trade.team_b.net_value)}
                       </span>
                     </div>
                   </div>

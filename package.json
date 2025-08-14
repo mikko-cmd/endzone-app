@@ -14,7 +14,8 @@
     "news-scan-test": "tsx scripts/dailyNewsScanner.ts --limit=20",
     "test-player-projections": "tsx scripts/testPlayerProjections.ts",
     "test:draft-data": "tsx scripts/testDraftData.ts",
-    "test:draft-api": "tsx scripts/testDraftAPI.ts"
+    "test:draft-api": "tsx scripts/testDraftAPI.ts",
+    "test:2025-projections": "tsx scripts/test2025SeasonProjections.ts"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.0",
