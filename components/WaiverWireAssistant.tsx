@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { TrendingUp, Users, AlertTriangle, Filter, Loader2 } from 'lucide-react';
+import { projectionService } from '@/lib/services/projectionService';
 
 interface WaiverWirePlayer {
   player_id: string;
@@ -58,7 +59,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         setData(result.data);
       } else {
@@ -96,7 +97,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
       {/* Header */}
       <div className="flex items-center space-x-3">
         <TrendingUp size={24} />
-        <h2 
+        <h2
           className="text-2xl font-normal"
           style={{ fontFamily: 'Consolas, monospace' }}
         >
@@ -109,7 +110,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center space-x-2">
             <Filter size={16} />
-            <span 
+            <span
               className="text-sm text-gray-400"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -130,7 +131,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
           </div>
 
           <div className="flex items-center space-x-2">
-            <span 
+            <span
               className="text-sm text-gray-400"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -171,7 +172,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
         <div className="bg-red-600/20 border border-red-600 rounded-none p-4">
           <div className="flex items-center space-x-2">
             <AlertTriangle size={16} className="text-red-400" />
-            <span 
+            <span
               className="text-red-300"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -185,7 +186,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
         <>
           {/* Team Needs */}
           <div className="bg-black border border-white/20 rounded-none p-4">
-            <h3 
+            <h3
               className="text-lg font-normal mb-3"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -194,19 +195,19 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {Object.entries(data.teamNeeds).map(([position, need]) => (
                 <div key={position} className="text-center">
-                  <div 
+                  <div
                     className="text-sm text-gray-400"
                     style={{ fontFamily: 'Consolas, monospace' }}
                   >
                     {position}
                   </div>
-                  <div 
+                  <div
                     className={`text-lg font-bold ${getPriorityColor(need.priority)}`}
                     style={{ fontFamily: 'Consolas, monospace' }}
                   >
                     {need.priority}
                   </div>
-                  <div 
+                  <div
                     className="text-xs text-gray-500"
                     style={{ fontFamily: 'Consolas, monospace' }}
                   >
@@ -220,7 +221,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
           {/* Available Players */}
           <div className="bg-black border border-white/20 rounded-none">
             <div className="p-4 border-b border-white/20">
-              <h3 
+              <h3
                 className="text-lg font-normal"
                 style={{ fontFamily: 'Consolas, monospace' }}
               >
@@ -234,20 +235,20 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <span 
+                        <span
                           className="text-lg font-bold text-white"
                           style={{ fontFamily: 'Consolas, monospace' }}
                         >
                           #{index + 1}
                         </span>
                         <div>
-                          <div 
+                          <div
                             className="text-lg font-normal text-white"
                             style={{ fontFamily: 'Consolas, monospace' }}
                           >
                             {player.name}
                           </div>
-                          <div 
+                          <div
                             className="text-sm text-gray-400"
                             style={{ fontFamily: 'Consolas, monospace' }}
                           >
@@ -260,7 +261,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
 
                       <div className="space-y-1">
                         {player.reasons.map((reason, reasonIndex) => (
-                          <div 
+                          <div
                             key={reasonIndex}
                             className="text-sm text-gray-300 flex items-center"
                             style={{ fontFamily: 'Consolas, monospace' }}
@@ -274,7 +275,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
                       {player.injury_status && (
                         <div className="mt-2 flex items-center space-x-2">
                           <AlertTriangle size={14} className="text-yellow-400" />
-                          <span 
+                          <span
                             className="text-sm text-yellow-400"
                             style={{ fontFamily: 'Consolas, monospace' }}
                           >
@@ -285,13 +286,13 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
                     </div>
 
                     <div className="text-right">
-                      <div 
+                      <div
                         className={`text-2xl font-bold ${getScoreColor(player.waiver_score)}`}
                         style={{ fontFamily: 'Consolas, monospace' }}
                       >
                         {player.waiver_score}
                       </div>
-                      <div 
+                      <div
                         className="text-xs text-gray-500"
                         style={{ fontFamily: 'Consolas, monospace' }}
                       >
@@ -305,7 +306,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
           </div>
 
           {/* Analysis Summary */}
-          <div 
+          <div
             className="text-xs text-gray-500 text-center"
             style={{ fontFamily: 'Consolas, monospace' }}
           >

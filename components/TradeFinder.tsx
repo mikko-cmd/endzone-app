@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Users, TrendingUp, ArrowLeftRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { projectionService } from '@/lib/services/projectionService';
 
 interface PlayerValue {
   player_id: string;
@@ -85,7 +86,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         setData(result.data);
       } else {
@@ -121,7 +122,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
       {/* Header */}
       <div className="flex items-center space-x-3">
         <Users size={24} />
-        <h2 
+        <h2
           className="text-2xl font-normal"
           style={{ fontFamily: 'Consolas, monospace' }}
         >
@@ -133,7 +134,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
       <div className="bg-black border border-white/20 rounded-none p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center space-x-2">
-            <span 
+            <span
               className="text-sm text-gray-400"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -153,7 +154,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
           </div>
 
           <div className="flex items-center space-x-2">
-            <span 
+            <span
               className="text-sm text-gray-400"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -194,7 +195,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
         <div className="bg-red-600/20 border border-red-600 rounded-none p-4">
           <div className="flex items-center space-x-2">
             <AlertTriangle size={16} className="text-red-400" />
-            <span 
+            <span
               className="text-red-300"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -208,7 +209,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
         <>
           {/* Analysis Summary */}
           <div className="bg-black border border-white/20 rounded-none p-4">
-            <h3 
+            <h3
               className="text-lg font-normal mb-3"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -237,7 +238,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
           {/* Trade Proposals */}
           <div className="bg-black border border-white/20 rounded-none">
             <div className="p-4 border-b border-white/20">
-              <h3 
+              <h3
                 className="text-lg font-normal"
                 style={{ fontFamily: 'Consolas, monospace' }}
               >
@@ -247,13 +248,13 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
 
             {data.trade_proposals.length === 0 ? (
               <div className="p-6 text-center">
-                <div 
+                <div
                   className="text-gray-400"
                   style={{ fontFamily: 'Consolas, monospace' }}
                 >
                   no trades meet your fairness criteria
                 </div>
-                <div 
+                <div
                   className="text-sm text-gray-500 mt-2"
                   style={{ fontFamily: 'Consolas, monospace' }}
                 >
@@ -265,20 +266,20 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                 {data.trade_proposals.map((trade, index) => (
                   <div key={trade.trade_id} className="p-4">
                     <div className="flex justify-between items-start mb-4">
-                      <div 
+                      <div
                         className="text-lg font-normal text-white"
                         style={{ fontFamily: 'Consolas, monospace' }}
                       >
                         #{index + 1} Trade Proposal
                       </div>
                       <div className="text-right">
-                        <div 
+                        <div
                           className={`text-lg font-bold ${getFairnessColor(trade.fairness_score)}`}
                           style={{ fontFamily: 'Consolas, monospace' }}
                         >
                           {(trade.fairness_score * 100).toFixed(0)}%
                         </div>
-                        <div 
+                        <div
                           className="text-xs text-gray-500"
                           style={{ fontFamily: 'Consolas, monospace' }}
                         >
@@ -291,7 +292,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                       {/* Team A */}
                       <div className="bg-black border border-white/10 p-3">
-                        <div 
+                        <div
                           className="text-sm font-bold text-white mb-2"
                           style={{ fontFamily: 'Consolas, monospace' }}
                         >
@@ -320,7 +321,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                               </div>
                             ))}
                           </div>
-                          <div 
+                          <div
                             className={`text-sm font-bold ${getValueColor(trade.team_a.net_value)}`}
                             style={{ fontFamily: 'Consolas, monospace' }}
                           >
@@ -336,7 +337,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
 
                       {/* Team B */}
                       <div className="bg-black border border-white/10 p-3">
-                        <div 
+                        <div
                           className="text-sm font-bold text-white mb-2"
                           style={{ fontFamily: 'Consolas, monospace' }}
                         >
@@ -365,7 +366,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                               </div>
                             ))}
                           </div>
-                          <div 
+                          <div
                             className={`text-sm font-bold ${getValueColor(trade.team_b.net_value)}`}
                             style={{ fontFamily: 'Consolas, monospace' }}
                           >
@@ -377,7 +378,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
 
                     {/* Reasoning */}
                     <div>
-                      <div 
+                      <div
                         className="text-sm font-bold text-white mb-2"
                         style={{ fontFamily: 'Consolas, monospace' }}
                       >
@@ -385,7 +386,7 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                       </div>
                       <div className="space-y-1">
                         {trade.reasoning.map((reason, reasonIndex) => (
-                          <div 
+                          <div
                             key={reasonIndex}
                             className="text-sm text-gray-300 flex items-center"
                             style={{ fontFamily: 'Consolas, monospace' }}

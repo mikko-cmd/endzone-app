@@ -235,6 +235,18 @@ export class ContextEngine {
                 date: '2024-03-15',
                 description: 'Signed with Titans after season with Jaguars',
                 fantasyImpact: 'Fresh start in new system with established QB'
+            },
+            'Najee Harris': {
+                type: 'signing',
+                date: '2025-03-10',
+                description: 'Signed with Chargers after leaving Steelers',
+                fantasyImpact: 'New team, potential backfield competition with rookie draft capital'
+            },
+            'Rhamondre Stevenson': {
+                type: 'draft',
+                date: '2025-04-26',
+                description: 'Patriots drafted Travion Henderson - potential backfield competition',
+                fantasyImpact: 'High draft capital rookie may impact workload distribution'
             }
             // Add more known 2025 team changes...
         };
@@ -425,10 +437,11 @@ export class ContextEngine {
     }
 
     // Method to get contextual factors for player comparison
-    getPlayerContextualFactors(playerContext: PlayerContext): string[] {
+    async getPlayerContextualFactors(playerName: string, team: string, position: string): Promise<string[]> {
         const factors: string[] = [];
 
         // Validate stats first
+        const playerContext = await this.getEnhancedPlayerContext(playerName, team, position);
         const statsValidation = this.validateStatsRelevance(playerContext);
         if (!statsValidation.statsValid) {
             factors.push(statsValidation.warningMessage!);
@@ -454,7 +467,60 @@ export class ContextEngine {
             factors.push(playerContext.coachingImpact);
         }
 
+        // Add coaching impact check (NEW)
+        const coachingImpact = await this.checkCoachingImpact(team);
+        if (coachingImpact) {
+            factors.push(coachingImpact);
+        }
+
+        // Check for rookie competition (NOW ASYNC)
+        const rookieCompetition = await this.checkRookieCompetition(playerName, position, team);
+        if (rookieCompetition) {
+            factors.push(rookieCompetition);
+        }
+
         return factors.slice(0, 2); // Limit to 2 most relevant
+    }
+
+    private async checkRookieCompetition(playerName: string, position: string, team: string): Promise<string | undefined> {
+        try {
+            // Ensure rookie data is loaded
+            await dataParser.parseRookieDraftCapital();
+
+            const competition = dataParser.getRookieCompetition(playerName);
+            if (competition) {
+                return `${competition.impactDescription} - ${competition.rookiePlayer} drafted in Round ${competition.round}`;
+            }
+
+            return undefined;
+        } catch (error: any) {
+            console.warn(`Error checking rookie competition for ${playerName}:`, error);
+            return undefined;
+        }
+    }
+
+    private async checkCoachingImpact(team: string): Promise<string | undefined> {
+        try {
+            await dataParser.parseCoachingChanges();
+            const changes = dataParser.getCoachingChange2025(team);
+
+            if (changes.length > 0) {
+                // Prioritize head coach changes over coordinator changes
+                const headCoachChange = changes.find(c => c.role === 'Head Coach');
+                const ocChange = changes.find(c => c.role === 'Offensive Coordinator');
+
+                if (headCoachChange) {
+                    return `New head coach ${headCoachChange.coachName}: ${headCoachChange.fantasyImpact}`;
+                } else if (ocChange) {
+                    return `New offensive coordinator ${ocChange.coachName}: ${ocChange.fantasyImpact}`;
+                }
+            }
+
+            return undefined;
+        } catch (error: any) {
+            console.warn(`Error checking coaching changes for ${team}:`, error);
+            return undefined;
+        }
     }
 
     // Method to invalidate cache when news breaks

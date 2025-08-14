@@ -117,6 +117,37 @@ interface DefenseStats {
     exp: number; // EXP (EPA-like)
 }
 
+interface RookieDraftCapitalData {
+    veteranPlayer: string;
+    veteranTeam: string;
+    rookiePlayer: string;
+    rookieTeam: string;
+    round: number;
+    pick: number;
+    position: string;
+    impactDescription: string;
+}
+
+interface PositionalDebateData {
+    veteranPlayer: string;
+    veteranTeam: string;
+    rookiePlayer: string;
+    rookieTeam: string;
+    round: number;
+    pick: number;
+    position: string;
+    impactDescription: string;
+}
+
+interface CoachingChangeData {
+    team: string;
+    coachName: string;
+    role: string;
+    previousTeam: string;
+    fantasyImpact: string;
+    keyDetails: string;
+}
+
 export class DataParser {
     private static instance: DataParser;
     private adpData: ADPData[] = [];
@@ -132,6 +163,9 @@ export class DataParser {
     private expertAnalysisCache: Map<string, string> = new Map();
     private scheduleData: ScheduleData[] = []; // Add this line
     private defenseStatsByAbbr: Record<string, DefenseStats> = {};
+    private positionalDebates: PositionalDebateData[] = [];
+    private rookieDraftCapital: RookieDraftCapitalData[] = [];
+    private coachingChanges2025: CoachingChangeData[] = [];
 
     static getInstance(): DataParser {
         if (!DataParser.instance) {
@@ -324,37 +358,31 @@ export class DataParser {
     /**
      * Parse coaching changes analysis
      */
-    async parseCoachingChanges(): Promise<void> {
+    async parseCoachingChanges(): Promise<CoachingChangeData[]> {
+        if (this.coachingChanges2025.length > 0) return this.coachingChanges2025;
+
         try {
-            const filePath = path.join(process.cwd(), 'data/analysis/2025_head_coaching_changes.txt');
+            const filePath = path.join(process.cwd(), 'data', 'research', '2025_coaching_changes.csv');
             const fileContent = fs.readFileSync(filePath, 'utf-8');
+            const lines = fileContent.split('\n').filter(line => line.trim());
 
-            // Parse coaching changes text file
-            const sections = fileContent.split(/Head Coach/i).filter(s => s.trim());
+            this.coachingChanges2025 = lines.slice(1).map(line => {
+                const values = line.split(',');
+                return {
+                    team: values[0]?.trim() || '',
+                    coachName: values[1]?.trim() || '',
+                    role: values[2]?.trim() || '',
+                    previousTeam: values[3]?.trim() || '',
+                    fantasyImpact: values[4]?.trim() || '',
+                    keyDetails: values[5]?.trim() || ''
+                };
+            });
 
-            for (const section of sections) {
-                const lines = section.split('\n').filter(l => l.trim());
-                if (lines.length >= 2) {
-                    const coachLine = lines[0].trim();
-                    const analysis = lines.slice(1).join('\n').trim();
-
-                    // Extract coach name and team (format: "Ben Johnson, CHI")
-                    const match = coachLine.match(/(.+),\s*([A-Z]{2,3})/);
-                    if (match) {
-                        const [, coachName, team] = match;
-
-                        this.coachingChanges.push({
-                            team: team,
-                            newCoach: coachName.trim(),
-                            position: 'Head Coach',
-                            analysis: analysis,
-                            fantasyImpact: this.extractFantasyImpact(analysis)
-                        });
-                    }
-                }
-            }
+            console.log(`✅ Parsed ${this.coachingChanges2025.length} coaching change entries`);
+            return this.coachingChanges2025;
         } catch (error) {
             console.error('Error parsing coaching changes:', error);
+            return [];
         }
     }
 
@@ -636,7 +664,10 @@ export class DataParser {
                 this.parseAllMarketShareData(), // This handles WR and TE market share
                 this.parseRedZoneData(), // This handles RB, WR, QB red zone data
                 this.parseNFLSchedule(),
-                this.parseDefenseStats()
+                this.parseDefenseStats(),
+                this.parseRookieDraftCapital(),
+                this.parsePositionalDebates(), // Add this line
+                this.parseCoachingChanges() // Add this line
             ]);
             console.log('✅ All enhanced data sources loaded successfully');
         } catch (error) {
@@ -677,6 +708,12 @@ export class DataParser {
 
     getCoachingChange(team: string): CoachingChange | undefined {
         return this.coachingChanges.find(change =>
+            change.team.toLowerCase() === team.toLowerCase()
+        );
+    }
+
+    getCoachingChange2025(team: string): CoachingChangeData[] {
+        return this.coachingChanges2025.filter(change =>
             change.team.toLowerCase() === team.toLowerCase()
         );
     }
@@ -776,7 +813,19 @@ export class DataParser {
             .filter(p => (p.position || '').toUpperCase() === pos && typeof p.ppr === 'number')
             .sort((a, b) => (a.ppr ?? 999) - (b.ppr ?? 999));
         if (filtered.length === 0) return null;
-        const index = filtered.findIndex(p => p.name.toLowerCase() === playerName.toLowerCase());
+        const index = filtered.findIndex(p => {
+            const adpName = p.name.toLowerCase();
+            const searchName = playerName.toLowerCase();
+
+            // Exact match first
+            if (adpName === searchName) return true;
+
+            // Try without "Jr." suffix
+            const adpNameWithoutJr = adpName.replace(/ jr\.?$/, '');
+            const searchNameWithoutJr = searchName.replace(/ jr\.?$/, '');
+
+            return adpNameWithoutJr === searchNameWithoutJr;
+        });
         if (index === -1) return null;
         return index + 1;
     }
@@ -970,6 +1019,42 @@ export class DataParser {
         return this.parseRBMarketShare();
     }
 
+    async parseRookieDraftCapital(): Promise<RookieDraftCapitalData[]> {
+        if (this.rookieDraftCapital.length > 0) return this.rookieDraftCapital;
+
+        try {
+            const filePath = path.join(process.cwd(), 'data', 'research', '2025_rookie_draft_capital.csv');
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            const lines = fileContent.split('\n').filter(line => line.trim());
+
+            this.rookieDraftCapital = lines.slice(1).map(line => {
+                const values = line.split(',');
+                return {
+                    veteranPlayer: values[0]?.trim() || '',
+                    veteranTeam: values[1]?.trim() || '',
+                    rookiePlayer: values[2]?.trim() || '',
+                    rookieTeam: values[3]?.trim() || '',
+                    round: parseInt(values[4]) || 0,
+                    pick: parseInt(values[5]) || 0,
+                    position: values[6]?.trim() || '',
+                    impactDescription: values[7]?.trim() || ''
+                };
+            });
+
+            console.log(`✅ Parsed ${this.rookieDraftCapital.length} rookie draft capital entries`);
+            return this.rookieDraftCapital;
+        } catch (error) {
+            console.error('Error parsing rookie draft capital data:', error);
+            return [];
+        }
+    }
+
+    getRookieCompetition(playerName: string): RookieDraftCapitalData | null {
+        return this.rookieDraftCapital.find(entry =>
+            entry.veteranPlayer.toLowerCase() === playerName.toLowerCase()
+        ) || null;
+    }
+
     // Add this function at the top of the DataParser class
     private normalizeTeamName(team: string): string {
         const teamMap: Record<string, string> = {
@@ -977,6 +1062,50 @@ export class DataParser {
             // Add other mappings if needed
         };
         return teamMap[team] || team;
+    }
+
+    // Parse positional debates
+    async parsePositionalDebates(): Promise<PositionalDebateData[]> {
+        if (this.positionalDebates.length > 0) return this.positionalDebates;
+
+        try {
+            const filePath = path.join(process.cwd(), 'data', 'research', '2025_positional_debates.csv');
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            const lines = fileContent.split('\n').filter(line => line.trim());
+
+            this.positionalDebates = lines.slice(1).map(line => {
+                const values = line.split(',');
+                return {
+                    veteranPlayer: values[0]?.trim() || '',
+                    veteranTeam: values[1]?.trim() || '',
+                    rookiePlayer: values[2]?.trim() || '',
+                    rookieTeam: values[3]?.trim() || '',
+                    round: parseInt(values[4]) || 0,
+                    pick: parseInt(values[5]) || 0,
+                    position: values[6]?.trim() || '',
+                    impactDescription: values[7]?.trim() || ''
+                };
+            });
+
+            console.log(`✅ Parsed ${this.positionalDebates.length} positional debate entries`);
+            return this.positionalDebates;
+        } catch (error) {
+            console.error('Error parsing positional debates:', error);
+            return [];
+        }
+    }
+
+    // Get methods for both
+    getPositionalDebate(playerName: string): PositionalDebateData | null {
+        return this.positionalDebates.find(entry =>
+            entry.veteranPlayer.toLowerCase() === playerName.toLowerCase()
+        ) || null;
+    }
+
+    getRookieDraftInfo(playerName: string): RookieDraftCapitalData | null {
+        return this.rookieDraftCapital.find(entry =>
+            entry.playerName.toLowerCase() === playerName.toLowerCase()
+        ) || null;
     }
 }
 

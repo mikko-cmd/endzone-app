@@ -447,6 +447,7 @@ export default function WhoDoIStartPage() {
                             redZoneTDs?: number | null;
                             weeklyOpponent?: any;
                             derived?: { redZoneEff?: string; positionRank?: string };
+                            projections?: { fantasyPoints: number };
                         }>;
 
                         const grade = (score: number) => {
@@ -468,9 +469,9 @@ export default function WhoDoIStartPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {rows.map((r) => (
-                                            <tr key={`${title}-${r.name}`}>
-                                                <td className={cell}>{r.name}</td>
+                                        {rows.map((r, index) => (
+                                            <tr key={`${title}-${r.name || `unknown-${index}`}`}>
+                                                <td className={cell}>{r.name || 'Unknown Player'}</td>
                                                 <td className={cell}>{r.value}</td>
                                             </tr>
                                         ))}
@@ -496,9 +497,14 @@ export default function WhoDoIStartPage() {
 
                         const projected = new Map<string, number>();
                         players.forEach(p => {
-                            projected.set(p.name, projected.get(p.name) ?? (players.indexOf(p) === 0 ? 17 : 13));
+                            // Use real projection data from API response
+                            const projectionPoints = p.projections?.fantasyPoints || 0;
+                            projected.set(p.name, projectionPoints);
                         });
-                        const projRows = players.map(p => ({ name: p.name, value: String(projected.get(p.name) ?? 12) }));
+                        const projRows = players.map(p => ({
+                            name: p.name,
+                            value: projected.get(p.name)?.toFixed(1) || '0.0'
+                        }));
 
                         return (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">

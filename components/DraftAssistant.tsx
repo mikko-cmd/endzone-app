@@ -15,6 +15,7 @@ import SnakeDraftBoard from './SnakeDraftBoard';
 import PlayerCardModal from './PlayerCardModal'; // Add this line
 import { useSleeperDraftMonitor } from '@/hooks/useSleeperDraftMonitor';
 import { getPlayerById } from '@/lib/sleeper/fetchAllPlayers';
+import { projectionService } from '@/lib/services/projectionService';
 
 // Types
 interface DraftPick {
