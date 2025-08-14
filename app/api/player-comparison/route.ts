@@ -423,16 +423,23 @@ Loser: ${contextData.loser.name} (${contextData.loser.position}, ${contextData.l
 - Red Zone: ${contextData.loser.redZoneTouchdowns}/${contextData.loser.redZoneAttempts} (${contextData.loser.redZoneEfficiency}%)
 - Home/Away: ${contextData.loser.isHome ? 'Home' : 'Away'}
 
+CONFIDENCE LEVEL: ${contextData.confidence}%
+SCORE DIFFERENTIAL: ${contextData.diff} points
+
 Writing Style Guidelines:
 - Use conversational, natural language like "about 25%" not "25.1%"
 - Specify team names (Jacksonville, Miami, etc.) not "previous team"
 - Use football vernacular naturally: "finding paydirt", "signal callers", "play the match-ups"
 - Include reality checks like "don't get lost in the sauce of 2024"
 - Give specific defense context: "29th-ranked defense that gave up 24.5 fantasy points per game"
-- End with confidence level but acknowledge when it's a "close call"
 - 200-250 words, conversational but knowledgeable
 
-Task: Write a start/sit analysis in a conversational, knowledgeable tone.`;
+CONFIDENCE INSTRUCTIONS:
+- If confidence > 85%: Use decisive language like "clear choice", "obvious pick", "not even close", "easy decision"
+- If confidence 70-85%: Use moderate language like "solid edge", "lean towards", "moderate advantage"
+- If confidence < 70%: Use cautious language like "close call", "tough decision", "flip a coin"
+
+Task: Write a start/sit analysis matching the confidence level. DO NOT say "close call" if confidence is above 85%.`;
 
             const completion = await openai.chat.completions.create({
                 model: "gpt-4",
