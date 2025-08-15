@@ -94,7 +94,7 @@ export async function GET(request: Request) {
             // Filter by URL parameter if provided
             const filteredResults = playerFilter
                 ? foundPlayers.filter(p => p.found &&
-                    (p.name?.toLowerCase().includes(playerFilter.toLowerCase()) ||
+                    (('name' in p && p.name?.toLowerCase().includes(playerFilter.toLowerCase())) ||
                         p.searchedFor?.toLowerCase().includes(playerFilter.toLowerCase())))
                 : foundPlayers;
 
