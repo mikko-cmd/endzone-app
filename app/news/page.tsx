@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, Newspaper } from 'lucide-react';
+import NewsFeed from '@/components/NewsFeed';
 
 interface NewsCardProps {
   title: string;
@@ -29,9 +30,9 @@ const NewsCard: React.FC<NewsCardProps> = ({ title, description, href, icon }) =
 
 export default async function NewsPage() {
   const supabase = createClient();
-  
+
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) {
     redirect('/auth/login');
   }
@@ -39,13 +40,13 @@ export default async function NewsPage() {
   return (
     <div className="min-h-screen bg-black text-white p-4 sm:p-8">
       <div className="w-full max-w-6xl mx-auto">
-        <h1 
+        <h1
           className="text-4xl font-normal mb-8"
           style={{ fontFamily: 'Consolas, monospace' }}
         >
           [news & updates]
         </h1>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <NewsCard
             title="Injury Reports"
@@ -53,20 +54,20 @@ export default async function NewsPage() {
             href="/news/injuries"
             icon={<AlertTriangle size={20} />}
           />
-          <NewsCard
-            title="League News"
-            description="General NFL and fantasy news"
-            href="/news"
-            icon={<Newspaper size={20} />}
-          />
+          <div
+            className="bg-black text-white border border-white/20 p-6 border-green-400"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            <div className="flex items-center space-x-3 mb-3">
+              <Newspaper size={20} />
+              <h3 className="text-xl font-normal">[League News]</h3>
+            </div>
+            <p className="text-sm text-gray-400">Currently viewing - ESPN news feed</p>
+          </div>
         </div>
 
-        <div 
-          className="bg-black border border-white/20 p-6"
-          style={{ fontFamily: 'Consolas, monospace' }}
-        >
-          <p className="text-gray-400">RotoWire news integration coming soon...</p>
-        </div>
+        {/* ESPN News Feed */}
+        <NewsFeed />
       </div>
     </div>
   );
