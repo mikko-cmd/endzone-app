@@ -163,7 +163,7 @@ export async function GET(
         console.log(`[WaiverWire] Loaded ${adpData.size} ADP entries and ${Object.keys(seasonProjections).length} projections`);
 
         // Get all projection values for Endzone Value calculation
-        const allProjectionValues = Object.values(seasonProjections).filter(p => p > 0);
+        const allProjectionValues = Object.values(seasonProjections).filter((p: number) => p > 0);
 
         // Calculate average roster Endzone Value for context
         let avgRosterEndzone = 500; // Default
@@ -173,9 +173,9 @@ export async function GET(
                     const playerName = playersData[id]?.full_name?.toLowerCase();
                     return playerName ? (seasonProjections[playerName] || 0) : 0;
                 })
-                .filter(p => p > 0);
+                .filter((p: number) => p > 0);
             if (rosterProjections.length > 0) {
-                const avgProjection = rosterProjections.reduce((sum, p) => sum + p, 0) / rosterProjections.length;
+                const avgProjection = rosterProjections.reduce((sum: number, p: number) => sum + p, 0) / rosterProjections.length;
                 avgRosterEndzone = calculateEndzoneValue(avgProjection, allProjectionValues);
             }
         }
@@ -232,10 +232,10 @@ export async function GET(
 
         // Group by priority for better display
         const groupedResults = {
-            must_add: availablePlayers.filter(p => p.pickup_priority === 'must_add').slice(0, 3),
-            strong_add: availablePlayers.filter(p => p.pickup_priority === 'strong_add').slice(0, 5),
-            solid_add: availablePlayers.filter(p => p.pickup_priority === 'solid_add').slice(0, 10),
-            speculative: availablePlayers.filter(p => p.pickup_priority === 'speculative').slice(0, 10)
+            must_add: availablePlayers.filter((p: WaiverWirePlayer) => p.pickup_priority === 'must_add').slice(0, 3),
+            strong_add: availablePlayers.filter((p: WaiverWirePlayer) => p.pickup_priority === 'strong_add').slice(0, 5),
+            solid_add: availablePlayers.filter((p: WaiverWirePlayer) => p.pickup_priority === 'solid_add').slice(0, 10),
+            speculative: availablePlayers.filter((p: WaiverWirePlayer) => p.pickup_priority === 'speculative').slice(0, 10)
         };
 
         const results = [
