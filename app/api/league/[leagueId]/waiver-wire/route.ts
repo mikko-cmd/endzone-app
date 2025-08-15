@@ -169,7 +169,10 @@ export async function GET(
         let avgRosterEndzone = 500; // Default
         if (userRoster?.players?.length > 0) {
             const rosterProjections = userRoster.players
-                .map((id: string) => seasonProjections[playersData[id]?.full_name?.toLowerCase()] || 0)
+                .map((id: string) => {
+                    const playerName = playersData[id]?.full_name?.toLowerCase();
+                    return playerName ? (seasonProjections[playerName] || 0) : 0;
+                })
                 .filter(p => p > 0);
             if (rosterProjections.length > 0) {
                 const avgProjection = rosterProjections.reduce((sum, p) => sum + p, 0) / rosterProjections.length;
