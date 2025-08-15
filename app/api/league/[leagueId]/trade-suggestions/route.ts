@@ -253,7 +253,7 @@ export async function GET(request: NextRequest, { params }: { params: { leagueId
             .sort((a, b) => b.fairness_score - a.fairness_score) // Best trades first
             .slice(0, max_results);
 
-        console.log(`[Trade Generation] Final result: ${allTrades.filter(t => t.trade_type.includes('1v')).length} simple + ${allTrades.filter(t => t.trade_type.includes('2v') || t.trade_type.includes('3v')).length} multi-player trades`);
+        console.log(`[Trade Generation] Final result: ${allTrades.filter(t => t.trade_type?.includes('1v')).length} simple + ${allTrades.filter(t => t.trade_type?.includes('2v') || t.trade_type?.includes('3v')).length} multi-player trades`);
 
         return NextResponse.json({
             success: true,
@@ -980,8 +980,8 @@ function generateMultiPlayerTrades(
         .filter(trade => trade.team_a.net_value > 0)
         .sort((a, b) => {
             // Prioritize cross-position balanced trades
-            const aIsBalanced = a.trade_type.includes('cross_position') ? 0.1 : 0;
-            const bIsBalanced = b.trade_type.includes('cross_position') ? 0.1 : 0;
+            const aIsBalanced = a.trade_type?.includes('cross_position') ? 0.1 : 0;
+            const bIsBalanced = b.trade_type?.includes('cross_position') ? 0.1 : 0;
 
             const aScore = a.fairness_score * 0.6 + (a.team_a.net_value / 1000) * 0.3 + aIsBalanced;
             const bScore = b.fairness_score * 0.6 + (b.team_a.net_value / 1000) * 0.3 + bIsBalanced;
