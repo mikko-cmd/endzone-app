@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+    console.warn('⚠️  Supabase credentials not found, skipping admin route initialization');
+}
+
+const supabase = supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null;
 
 function normalizePlayerName(name: string): string {
     return name
@@ -16,6 +22,13 @@ function normalizePlayerName(name: string): string {
 }
 
 export async function POST(): Promise<NextResponse> {
+    if (!supabase) {
+        return NextResponse.json(
+            { error: 'Supabase not configured' },
+            { status: 500 }
+        );
+    }
+
     try {
         console.log('📥 Downloading nflverse player data...');
 
@@ -141,6 +154,13 @@ export async function POST(): Promise<NextResponse> {
 }
 
 export async function GET(): Promise<NextResponse> {
+    if (!supabase) {
+        return NextResponse.json(
+            { error: 'Supabase not configured' },
+            { status: 500 }
+        );
+    }
+
     try {
         const { data: playersWithEspnIds, error } = await supabase
             .from('players')

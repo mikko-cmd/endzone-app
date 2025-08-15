@@ -93,6 +93,7 @@ export async function GET(
     request: Request,
     { params }: { params: { leagueId: string } }
 ) {
+    const start = Date.now();
     try {
         const url = new URL(request.url);
         const max_results = parseInt(url.searchParams.get('max_results') || '10');
@@ -119,22 +120,130 @@ export async function GET(
             }, { status: 404 });
         }
 
-        // Generate simple trades
-        const simpleTrades = generateSimpleTrades(
-            { owner_id: 'user', team_name: 'Your Team', players: [], strengths: [], weaknesses: [], surplus_positions: [], needed_positions: [], overall_score: 0 },
-            [],
-            max_results
+        // Fetch roster data from Sleeper
+        const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${params.leagueId}/rosters`);
+        const playersResponse = await fetch(`https://api.sleeper.app/v1/players/nfl`);
+
+        if (!rostersResponse.ok || !playersResponse.ok) {
+            throw new Error('Failed to fetch league data from Sleeper');
+        }
+
+        const rosters = await rostersResponse.json();
+        const allPlayers = await playersResponse.json();
+
+        // Get user's roster - need to find the correct owner_id for username 'slantaclause'
+        console.log('🔍 Looking for user:', league.sleeper_username);
+
+        // First, let's get user info from Sleeper to find the correct ID
+        let userOwnerId = null;
+
+        try {
+            // Get all users in the league to find the mapping
+            const usersResponse = await fetch(`https://api.sleeper.app/v1/league/${params.leagueId}/users`);
+            const users = await usersResponse.json();
+
+            console.log('👥 League users:', users.map((u: any) => ({
+                user_id: u.user_id,
+                username: u.username,
+                display_name: u.display_name
+            })));
+
+            // Find the user by username
+            const user = users.find((u: any) =>
+                u.username === league.sleeper_username ||
+                u.display_name === league.sleeper_username
+            );
+
+            if (user) {
+                userOwnerId = user.user_id;
+                console.log('✅ Found user ID:', userOwnerId, 'for username:', league.sleeper_username);
+            } else {
+                console.log('❌ Username not found in league users');
+                // Fallback: use the first roster for testing
+                userOwnerId = rosters[0]?.owner_id;
+                console.log('🔄 Using first available roster for testing:', userOwnerId);
+            }
+        } catch (error) {
+            console.error('❌ Failed to fetch users, using fallback');
+            userOwnerId = rosters[0]?.owner_id;
+        }
+
+        const userRoster = rosters.find((r: any) => r.owner_id === userOwnerId);
+        if (!userRoster) {
+            throw new Error(`User roster still not found. Tried owner_id: ${userOwnerId}`);
+        }
+
+        console.log('🎯 Successfully found user roster:', {
+            owner_id: userRoster.owner_id,
+            roster_id: userRoster.roster_id,
+            players_count: userRoster.players?.length || 0
+        });
+
+        // Process and enhance player values
+        const enhancedTeams = await Promise.all(
+            rosters.map(async (roster: any) => {
+                const teamPlayers = roster.players?.map((playerId: string) => {
+                    const player = allPlayers[playerId];
+                    if (!player) return null;
+
+                    return {
+                        player_id: playerId,
+                        name: player.full_name || `${player.first_name} ${player.last_name}`,
+                        position: player.position,
+                        team: player.team,
+                        value: calculatePlayerValue(player),
+                        trade_value: calculatePlayerValue(player), // Add this line
+                        projected_points: getPlayerProjection(player),
+                        scarcity_bonus: 0,
+                        adp_rank: player.adp_rank || 999
+                    };
+                }).filter(Boolean);
+
+                return {
+                    owner_id: roster.owner_id,
+                    team_name: `Team ${roster.owner_id}`,
+                    players: teamPlayers,
+                    strengths: [],
+                    weaknesses: [],
+                    surplus_positions: [],
+                    needed_positions: [],
+                    overall_score: 0
+                };
+            })
         );
+
+        // Find user team and other teams - use the correct userOwnerId we found earlier
+        const userTeam = enhancedTeams.find(t => t.owner_id === userOwnerId);
+        const otherTeams = enhancedTeams.filter(t => t.owner_id !== userOwnerId);
+
+        console.log('🏈 Team analysis:', {
+            userTeam: userTeam ? {
+                owner_id: userTeam.owner_id,
+                players_count: userTeam.players?.length
+            } : 'NOT_FOUND',
+            otherTeams_count: otherTeams.length,
+            otherTeams_sample: otherTeams.slice(0, 2).map(t => ({
+                owner_id: t.owner_id,
+                players_count: t.players?.length
+            }))
+        });
+
+        if (!userTeam) {
+            throw new Error(`User team not found in enhanced teams. UserOwnerId: ${userOwnerId}`);
+        }
+
+        // Generate real trades
+        const realTrades = generateRealTrades(userTeam!, otherTeams, max_results);
 
         // Return response
         return NextResponse.json({
             success: true,
             data: {
-                trade_proposals: simpleTrades,
-                team_analyses: [],
-                total_players_analyzed: 0,
+                trade_proposals: realTrades,
+                team_analyses: enhancedTeams,
+                total_players_analyzed: enhancedTeams.reduce((sum, team) => sum + team.players.length, 0),
                 analysis: {
-                    duration: 100,
+                    duration: Date.now() - start,
                     week_1_projections: 0,
                     week_2_projections: 0,
                     fairness_threshold: 0.7
@@ -434,4 +543,111 @@ function calculateEndzoneValue(projectedPoints: number, allProjectionValues: num
 
     const playerRank = validProjections.findIndex(p => p <= projectedPoints);
     return Math.round((validProjections.length - playerRank + 1) / validProjections.length * 1000);
+}
+
+function calculatePlayerValue(player: any): number {
+    const baseValue = getPlayerProjection(player);
+    const positionMultiplier: { [key: string]: number } = {
+        'QB': 1.0,
+        'RB': 1.2,
+        'WR': 1.1,
+        'TE': 1.0,
+        'K': 0.5,
+        'DEF': 0.6
+    };
+
+    return Math.round(baseValue * (positionMultiplier[player.position] || 1.0));
+}
+
+function getPlayerProjection(player: any): number {
+    const projections: { [key: string]: number } = {
+        'QB': 250,
+        'RB': 180,
+        'WR': 150,
+        'TE': 120,
+        'K': 100,
+        'DEF': 110
+    };
+
+    return projections[player.position] || 100;
+}
+
+function generateRealTrades(
+    userTeam: TeamAnalysis,
+    otherTeams: TeamAnalysis[],
+    maxResults: number
+): TradeProposal[] {
+    console.log('🔄 Generating trades...', {
+        userTeam_id: userTeam?.owner_id,
+        userTeam_players: userTeam?.players?.length || 'UNDEFINED',
+        otherTeams_count: otherTeams?.length || 'UNDEFINED',
+        otherTeams_players: otherTeams?.map(t => ({
+            id: t?.owner_id,
+            players: t?.players?.length || 'UNDEFINED'
+        }))
+    });
+
+    if (!userTeam?.players) {
+        console.error('❌ UserTeam has no players array:', userTeam);
+        return [];
+    }
+
+    if (!otherTeams || otherTeams.length === 0) {
+        console.error('❌ No other teams provided');
+        return [];
+    }
+
+    const trades: TradeProposal[] = [];
+
+    // Generate 1v1 trades
+    userTeam.players.forEach(userPlayer => {
+        otherTeams.forEach(otherTeam => {
+            otherTeam.players.forEach(otherPlayer => {
+                if (userPlayer.position !== otherPlayer.position) return; // Same position trades for now
+
+                const valueDiff = Math.abs(userPlayer.value - otherPlayer.value);
+                if (valueDiff > 50) return; // Skip unfair trades
+
+                const trade: TradeProposal = {
+                    trade_id: `${userPlayer.player_id}_${otherPlayer.player_id}`,
+                    team_a: {
+                        owner_id: userTeam.owner_id,
+                        team_name: userTeam.team_name,
+                        giving: [{
+                            ...userPlayer,
+                            trade_value: userPlayer.value // Ensure trade_value exists
+                        }],
+                        receiving: [{
+                            ...otherPlayer,
+                            trade_value: otherPlayer.value // Ensure trade_value exists
+                        }],
+                        net_value: otherPlayer.value - userPlayer.value
+                    },
+                    team_b: {
+                        owner_id: otherTeam.owner_id,
+                        team_name: otherTeam.team_name,
+                        giving: [{
+                            ...otherPlayer,
+                            trade_value: otherPlayer.value // Ensure trade_value exists
+                        }],
+                        receiving: [{
+                            ...userPlayer,
+                            trade_value: userPlayer.value // Ensure trade_value exists
+                        }],
+                        net_value: userPlayer.value - otherPlayer.value
+                    },
+                    fairness_score: 1 - (valueDiff / 100),
+                    trade_type: '1v1_simple',
+                    reasoning: [`${userPlayer.position} for ${otherPlayer.position} trade`],
+                    fairness_tier: valueDiff < 20 ? 'very_strict' : 'somewhat_fair'
+                };
+
+                trades.push(trade);
+            });
+        });
+    });
+
+    return trades
+        .sort((a, b) => b.fairness_score - a.fairness_score)
+        .slice(0, maxResults);
 }

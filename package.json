@@ -5,6 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "vercel-build": "next build",
     "dev-clean": "npm run clean && npm run dev",
     "clean": "rimraf .next && npm cache clean --force",
     "dev-windows": "npm run clean && timeout /t 2 && npm run dev",
