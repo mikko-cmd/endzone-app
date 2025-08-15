@@ -2211,7 +2211,7 @@ export default function DraftAssistant() {
                                                                     console.warn('❌ Player not found in Sleeper database:', player.name);
                                                                     alert(`Player "${player.name}" not found in Sleeper database.`);
                                                                 }
-                                                            } catch (error) {
+                                                            } catch (error: any) {
                                                                 console.error('Error looking up player:', error);
                                                                 alert(`Error looking up player "${player.name}"`);
                                                             }

@@ -206,7 +206,7 @@ const GameLogTab = ({ gameLog, playerPosition, playerTeam, player, playerId, sea
 
   // Common scrollable table component
   const ScrollableGameTable = ({ data, isSchedule = false, emptyMessage, playerPosition }: {
-    data: any[];
+    data: Record<string, any>[];  // More specific than any[]
     isSchedule?: boolean;
     emptyMessage: string;
     playerPosition: string;

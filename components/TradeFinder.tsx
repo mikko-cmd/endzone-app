@@ -254,5 +254,89 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
                         #{index + 1} Trade Proposal
                       </div>
                       <div className="text-right">
-                        <div
-                          className={`
+                        <div className={`text-sm font-bold ${getFairnessColor(trade.fairness_score)}`}>
+                          {(trade.fairness_score * 100).toFixed(0)}% Fair
+                        </div>
+                        <div className="text-xs text-gray-400 capitalize">
+                          {trade.fairness_tier.replace('_', ' ')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trade Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Team A */}
+                      <div className="bg-gray-900/50 p-3 rounded-none">
+                        <div className="text-white font-bold mb-2">{trade.team_a.team_name}</div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-gray-400">Giving:</div>
+                          {trade.team_a.giving.map((player) => (
+                            <div key={player.player_id} className="text-sm">
+                              <span className="text-white">{player.name}</span>
+                              <span className="text-gray-400 ml-2">({player.position})</span>
+                            </div>
+                          ))}
+                          <div className="text-xs text-gray-400 mt-2">Receiving:</div>
+                          {trade.team_a.receiving.map((player) => (
+                            <div key={player.player_id} className="text-sm">
+                              <span className="text-white">{player.name}</span>
+                              <span className="text-gray-400 ml-2">({player.position})</span>
+                            </div>
+                          ))}
+                          <div className={`text-sm font-bold mt-2 ${getValueColor(trade.team_a.net_value)}`}>
+                            Net Value: {trade.team_a.net_value > 0 ? '+' : ''}{trade.team_a.net_value.toFixed(1)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Trade Arrow */}
+                      <div className="flex items-center justify-center">
+                        <ArrowLeftRight className="text-gray-400" size={20} />
+                      </div>
+
+                      {/* Team B */}
+                      <div className="bg-gray-900/50 p-3 rounded-none">
+                        <div className="text-white font-bold mb-2">{trade.team_b.team_name}</div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-gray-400">Giving:</div>
+                          {trade.team_b.giving.map((player) => (
+                            <div key={player.player_id} className="text-sm">
+                              <span className="text-white">{player.name}</span>
+                              <span className="text-gray-400 ml-2">({player.position})</span>
+                            </div>
+                          ))}
+                          <div className="text-xs text-gray-400 mt-2">Receiving:</div>
+                          {trade.team_b.receiving.map((player) => (
+                            <div key={player.player_id} className="text-sm">
+                              <span className="text-white">{player.name}</span>
+                              <span className="text-gray-400 ml-2">({player.position})</span>
+                            </div>
+                          ))}
+                          <div className={`text-sm font-bold mt-2 ${getValueColor(trade.team_b.net_value)}`}>
+                            Net Value: {trade.team_b.net_value > 0 ? '+' : ''}{trade.team_b.net_value.toFixed(1)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trade Reasoning */}
+                    {trade.reasoning.length > 0 && (
+                      <div className="mt-4 p-3 bg-gray-800/50 rounded-none">
+                        <div className="text-xs text-gray-400 mb-2">Analysis:</div>
+                        <div className="text-sm text-gray-300 space-y-1">
+                          {trade.reasoning.map((reason, idx) => (
+                            <div key={idx}>• {reason}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
