@@ -69,7 +69,7 @@ export async function GET() {
                 const leagueActivity = await fetchLeagueActivity(league.sleeper_league_id, league.league_name);
                 allActivity.push(...leagueActivity);
                 console.log(`[Activity] Added ${leagueActivity.length} activities from ${league.league_name}`);
-            } catch (error) {
+            } catch (error: any) {
                 console.error(`[Activity] Failed to fetch activity for league ${league.league_name}:`, error);
                 // Continue with other leagues
             }
@@ -124,7 +124,7 @@ async function fetchLeagueActivity(leagueId: string, leagueName: string): Promis
     const allWeeksToCheck = [...peakWeeks, ...Array.from({ length: endWeek - startWeek + 1 }, (_, i) => startWeek + i)];
 
     // Remove duplicates and limit to reasonable number
-    const uniqueWeeks = [...new Set(allWeeksToCheck)].slice(0, 10);
+    const uniqueWeeks = Array.from(new Set(allWeeksToCheck)).slice(0, 10);
 
     for (const week of uniqueWeeks) {
         weeksToCheck.push(week);

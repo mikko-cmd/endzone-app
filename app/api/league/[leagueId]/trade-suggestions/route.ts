@@ -141,7 +141,7 @@ async function getSeasonProjections(): Promise<{ [playerName: string]: number }>
         console.log(`[Endzone Value] Loaded projections for ${Object.keys(projections).length} players by name`);
         console.log(`[Endzone Value] Sample names:`, Object.keys(projections).slice(0, 5));
         return projections;
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Endzone Value] Failed to load projections:', error);
         return {};
     }

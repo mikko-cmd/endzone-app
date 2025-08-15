@@ -352,7 +352,7 @@ async function getSeasonProjections(): Promise<{ [playerName: string]: number }>
 
         console.log(`[Waiver Wire] Loaded projections for ${Object.keys(projections).length} players`);
         return projections;
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Waiver Wire] Failed to load projections:', error);
         return {};
     }

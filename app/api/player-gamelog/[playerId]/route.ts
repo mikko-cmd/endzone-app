@@ -279,7 +279,7 @@ export async function GET(
     // Generate a realistic schedule even for fallback
     const teamSchedule = generateTeamSchedule(player.team, parseInt(season));
 
-    const emptyGameLog: any[] = [];
+    const emptyGameLog: Array<Record<string, any>> = [];
     for (let week = 1; week <= 17; week++) {
       const isByeWeek = isTeamByeWeek(player.team, week, parseInt(season));
       const opponent = isByeWeek ? 'BYE' : teamSchedule[week - 1];
