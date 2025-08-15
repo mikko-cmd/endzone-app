@@ -105,7 +105,7 @@ export default async function WaiverWireToolPage() {
               {leagues.map((league: League) => (
                 <Link
                   key={league.sleeper_league_id}
-                  href={`/league/${league.sleeper_league_id}/waivers`}
+                  href={`/league/${league.sleeper_league_id}/waivers?from=ai-tools`}
                   className="group"
                 >
                   <div

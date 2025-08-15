@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, X, Eye, UserPlus, UserMinus } from 'lucide-react';
+import { Search, X, Eye, UserPlus, UserMinus, Clock } from 'lucide-react';
 
 interface DraftPick {
     pick: number;
@@ -34,6 +34,10 @@ interface SnakeDraftBoardProps {
     isDrafting?: boolean; // New prop to track if draft has started
     mode?: 'mock' | 'live'; // Add this line
     teamNames?: Record<number, string>; // Add this line
+
+    // NEW: AI Suggestion props
+    isUserTurn?: boolean;
+    aiSuggestions?: Player[];
 }
 
 // Utility function for position-based colors
@@ -89,13 +93,16 @@ export default function SnakeDraftBoard({
     onClaimTeam,
     isDrafting = false,
     mode = 'mock',
-    teamNames = {} // Add this line
+    teamNames = {}, // Add this line
+    isUserTurn, // Add this line
+    aiSuggestions // Add this line
 }: SnakeDraftBoardProps) {
     const [hoveredCell, setHoveredCell] = useState<string | null>(null);
     const [activeCell, setActiveCell] = useState<CellAction | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<Player[]>([]);
     const [loadingSearch, setLoadingSearch] = useState(false);
+    const [showSearch, setShowSearch] = useState(false);
     const contextMenuRef = useRef<HTMLDivElement>(null);
 
     // Create a map of pick numbers to pick data for easy lookup
@@ -145,6 +152,26 @@ export default function SnakeDraftBoard({
         event: React.MouseEvent
     ) => {
         const rect = event.currentTarget.getBoundingClientRect();
+        const menuWidth = 280; // min-w-[280px] from the context menu
+        const menuHeight = 200; // Estimated height
+
+        // Calculate initial position
+        let x = rect.left;
+        let y = rect.bottom + 8;
+
+        // Adjust horizontal position if menu would go off screen
+        if (x + menuWidth > window.innerWidth) {
+            x = window.innerWidth - menuWidth - 16; // 16px padding from edge
+        }
+
+        // Adjust vertical position if menu would go off screen
+        if (y + menuHeight > window.innerHeight + window.scrollY) {
+            y = rect.top + window.scrollY - menuHeight - 8; // Position above the cell
+        }
+
+        // Ensure minimum distances from edges
+        x = Math.max(16, x);
+        y = Math.max(16, y);
 
         setActiveCell({
             pickNumber,
@@ -152,16 +179,14 @@ export default function SnakeDraftBoard({
             teamPosition,
             hasPlayer: !!player,
             player: player || undefined,
-            position: {
-                x: rect.left,
-                y: rect.bottom + window.scrollY + 8
-            }
+            position: { x, y }
         });
         setSearchQuery('');
         setSearchResults([]);
+        setShowSearch(false); // Reset search visibility
     };
 
-    // Close context menu when clicking outside
+    // Close context menu when clicking outside and handle repositioning
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
@@ -169,12 +194,26 @@ export default function SnakeDraftBoard({
             }
         };
 
+        const handleScroll = () => {
+            // Close menu when scrolling to avoid positioning issues
+            setActiveCell(null);
+        };
+
+        const handleResize = () => {
+            // Close menu when window resizes
+            setActiveCell(null);
+        };
+
         if (activeCell) {
             document.addEventListener('mousedown', handleClickOutside);
+            window.addEventListener('scroll', handleScroll, true); // Use capture to catch all scroll events
+            window.addEventListener('resize', handleResize);
         }
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+            window.removeEventListener('resize', handleResize);
         };
     }, [activeCell]);
 
@@ -251,66 +290,79 @@ export default function SnakeDraftBoard({
                 </div>
             )}
 
-            {/* Team Headers */}
-            <div className="grid border-b border-white/20 mb-2"
-                style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>
-                {Array.from({ length: leagueSize }, (_, i) => {
-                    const teamNumber = i + 1;
-                    const isUserTeam = userTeamPosition === teamNumber;
+            {/* YOUR TURN BANNER - Add this above the existing header */}
+            {isUserTurn && (
+                <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 text-black text-center py-3 font-bold animate-pulse">
+                    <div className="flex items-center justify-center space-x-2">
+                        <Clock size={20} />
+                        <span className="text-lg font-mono">YOUR TURN TO DRAFT</span>
+                        <Clock size={20} />
+                    </div>
+                </div>
+            )}
 
-                    // Determine team display name based on mode and available data
-                    let teamDisplayName: string;
+            {/* Push content down when banner is visible */}
+            <div className={`min-h-screen bg-black text-white ${isUserTurn ? 'pt-16' : ''}`}>
+                {/* Team Headers */}
+                <div className="grid border-b border-white/20 mb-2"
+                    style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>
+                    {Array.from({ length: leagueSize }, (_, i) => {
+                        const teamNumber = i + 1;
+                        const isUserTeam = userTeamPosition === teamNumber;
 
-                    if (mode === 'live') {
-                        // In live mode: use Sleeper team name if available, otherwise "Team X"
-                        if (teamNames[teamNumber]) {
-                            teamDisplayName = teamNames[teamNumber];
+                        // Determine team display name based on mode and available data
+                        let teamDisplayName: string;
+
+                        if (mode === 'live') {
+                            // In live mode: use Sleeper team name if available, otherwise "Team X"
+                            if (teamNames[teamNumber]) {
+                                teamDisplayName = teamNames[teamNumber];
+                            } else {
+                                teamDisplayName = `Team ${teamNumber}`;
+                            }
+                            // Only show "ME" indicator if we know which team is the user's
+                            if (isUserTeam && userTeamPosition !== null) {
+                                teamDisplayName = `${teamDisplayName} (ME)`;
+                            }
                         } else {
-                            teamDisplayName = `Team ${teamNumber}`;
+                            // In mock mode: use "ME" for user team, "Team X" for others
+                            teamDisplayName = isUserTeam ? 'ME' : `Team ${teamNumber}`;
                         }
-                        // Only show "ME" indicator if we know which team is the user's
-                        if (isUserTeam && userTeamPosition !== null) {
-                            teamDisplayName = `${teamDisplayName} (ME)`;
-                        }
-                    } else {
-                        // In mock mode: use "ME" for user team, "Team X" for others
-                        teamDisplayName = isUserTeam ? 'ME' : `Team ${teamNumber}`;
-                    }
 
-                    return (
-                        <div key={i} className={`p-2 text-center bg-black border ${isUserTeam ? 'border-white' : 'border-white/10'}`}>
-                            <span className={`font-mono text-sm ${isUserTeam ? 'text-white font-bold' : 'text-gray-300'}`}>
-                                {teamDisplayName}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
+                        return (
+                            <div key={i} className={`p-2 text-center bg-black border ${isUserTeam ? 'border-white' : 'border-white/10'}`}>
+                                <span className={`font-mono text-sm ${isUserTeam ? 'text-white font-bold' : 'text-gray-300'}`}>
+                                    {teamDisplayName}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
 
-            {/* Draft Grid */}
-            <div className="space-y-1 pb-64">
-                {gridData.map((roundData, roundIndex) => (
-                    <div key={roundIndex}>
-                        {/* Round Label */}
-                        <div className="flex items-center mb-1">
-                            <span className="font-mono text-xs text-gray-500 w-16">R{roundIndex + 1}</span>
-                        </div>
+                {/* Draft Grid */}
+                <div className="space-y-1 pb-64">
+                    {gridData.map((roundData, roundIndex) => (
+                        <div key={roundIndex}>
+                            {/* Round Label */}
+                            <div className="flex items-center mb-1">
+                                <span className="font-mono text-xs text-gray-500 w-16">R{roundIndex + 1}</span>
+                            </div>
 
-                        {/* Round Row */}
-                        <div className="grid"
-                            style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>
-                            {roundData.map((cellData) => {
-                                const { pickNumber, pick, teamPosition } = cellData;
-                                const isCurrentPick = pickNumber === nextPick;
-                                const cellKey = `${roundIndex}-${teamPosition}`;
-                                const isHovered = hoveredCell === cellKey;
-                                const isActive = activeCell?.pickNumber === pickNumber;
-                                const isUserTeamCell = userTeamPosition === teamPosition;
+                            {/* Round Row */}
+                            <div className="grid"
+                                style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>
+                                {roundData.map((cellData) => {
+                                    const { pickNumber, pick, teamPosition } = cellData;
+                                    const isCurrentPick = pickNumber === nextPick;
+                                    const cellKey = `${roundIndex}-${teamPosition}`;
+                                    const isHovered = hoveredCell === cellKey;
+                                    const isActive = activeCell?.pickNumber === pickNumber;
+                                    const isUserTeamCell = userTeamPosition === teamPosition;
 
-                                return (
-                                    <div
-                                        key={cellKey}
-                                        className={`
+                                    return (
+                                        <div
+                                            key={cellKey}
+                                            className={`
                       relative p-2 min-h-[60px] 
                       transition-all duration-200 cursor-pointer
                       ${isUserTeamCell ? 'border-2 border-white' : 'border border-white/15'}
@@ -319,155 +371,160 @@ export default function SnakeDraftBoard({
                       ${isHovered && !isActive ? 'bg-gray-800/50' : 'bg-black'}
                       hover:bg-gray-800/50
                     `}
-                                        onMouseEnter={() => setHoveredCell(cellKey)}
-                                        onMouseLeave={() => setHoveredCell(null)}
-                                        onClick={(e) => handleCellClick(pickNumber, roundIndex + 1, teamPosition, pick, e)}
-                                    >
-                                        {/* Pick Number (small, top-left) */}
-                                        <div className="absolute top-1 left-1 font-mono text-[10px] text-gray-500">
-                                            {pickNumber}
-                                        </div>
+                                            onMouseEnter={() => setHoveredCell(cellKey)}
+                                            onMouseLeave={() => setHoveredCell(null)}
+                                            onClick={(e) => handleCellClick(pickNumber, roundIndex + 1, teamPosition, pick, e)}
+                                        >
+                                            {/* Pick Number (small, top-left) */}
+                                            <div className="absolute top-1 left-1 font-mono text-[10px] text-gray-500">
+                                                {pickNumber}
+                                            </div>
 
-                                        {/* Player Info */}
-                                        <div className="mt-3">
-                                            {pick?.player ? (
-                                                <div>
-                                                    <div className={`font-mono text-sm truncate ${getPositionColor(pick.position || '')}`}>
-                                                        {pick.player}
+                                            {/* Player Info */}
+                                            <div className="mt-3">
+                                                {pick?.player ? (
+                                                    <div>
+                                                        <div className={`font-mono text-sm truncate ${getPositionColor(pick.position || '')}`}>
+                                                            {pick.player}
+                                                        </div>
+                                                        <div className={`font-mono text-xs ${getPositionColor(pick.position || '')}`}>
+                                                            {pick.position} • {pick.team}
+                                                        </div>
                                                     </div>
-                                                    <div className={`font-mono text-xs ${getPositionColor(pick.position || '')}`}>
-                                                        {pick.position} • {pick.team}
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full">
+                                                        <span className="font-mono text-xs text-gray-600">
+                                                            {isCurrentPick ? 'ON CLOCK' : '—'}
+                                                        </span>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-center h-full">
-                                                    <span className="font-mono text-xs text-gray-600">
-                                                        {isCurrentPick ? 'ON CLOCK' : '—'}
-                                                    </span>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Context Menu */}
-            {activeCell && (
-                <div
-                    ref={contextMenuRef}
-                    className="fixed z-50 bg-black border border-white/20 shadow-xl p-3 min-w-[280px]"
-                    style={{
-                        left: `${activeCell.position.x}px`,
-                        top: `${activeCell.position.y}px`,
-                    }}
-                >
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
-                        <div>
-                            <div className="font-mono text-sm text-white">
-                                Pick #{activeCell.pickNumber}
-                            </div>
-                            <div className="font-mono text-xs text-gray-400">
-                                Round {activeCell.round} • Team {activeCell.teamPosition}
+                                    );
+                                })}
                             </div>
                         </div>
-                        <button
-                            onClick={() => setActiveCell(null)}
-                            className="text-gray-400 hover:text-white"
-                        >
-                            <X size={16} />
-                        </button>
-                    </div>
+                    ))}
+                </div>
 
-                    {/* Action Buttons */}
-                    <div className="space-y-2">
-                        {/* Manually Assign Player */}
-                        <div>
-                            <button
-                                className="w-full flex items-center gap-2 p-2 text-left font-mono text-sm text-white hover:bg-gray-800 border border-white/10"
-                                onClick={() => { }} // This will expand the search
-                            >
-                                <UserPlus size={16} />
-                                Manually Assign Player
-                            </button>
-
-                            {/* Player Search */}
-                            <div className="mt-2 space-y-2">
-                                <div className="relative">
-                                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search players..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full bg-black border border-white/20 text-white pl-8 pr-3 py-1 font-mono text-xs"
-                                        autoFocus
-                                    />
+                {/* Context Menu */}
+                {activeCell && (
+                    <div
+                        ref={contextMenuRef}
+                        className="fixed z-50 bg-black border border-white/20 shadow-xl p-3 min-w-[280px] max-w-[320px]"
+                        style={{
+                            left: `${Math.min(activeCell.position.x, window.innerWidth - 320 - 16)}px`,
+                            top: `${activeCell.position.y}px`,
+                            maxHeight: `${window.innerHeight - 32}px`,
+                            overflowY: 'auto'
+                        }}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
+                            <div>
+                                <div className="font-mono text-sm text-white">
+                                    Pick #{activeCell.pickNumber}
                                 </div>
+                                <div className="font-mono text-xs text-gray-400">
+                                    Round {activeCell.round} • Team {activeCell.teamPosition}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setActiveCell(null)}
+                                className="text-gray-400 hover:text-white"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
 
-                                {/* Search Results */}
-                                {searchQuery.length >= 2 && (
-                                    <div className="max-h-32 overflow-y-auto border border-white/10 bg-gray-950">
-                                        {loadingSearch ? (
-                                            <div className="p-2 text-center text-gray-400 font-mono text-xs">
-                                                Searching...
-                                            </div>
-                                        ) : searchResults.length > 0 ? (
-                                            <div className="divide-y divide-white/10">
-                                                {searchResults.map((player) => (
-                                                    <button
-                                                        key={`${player.name}-${player.team}`}
-                                                        onClick={() => handleManualAssign(player)}
-                                                        className="w-full p-2 text-left hover:bg-gray-800 transition-colors"
-                                                    >
-                                                        <div className={`font-mono text-xs ${getPositionColor(player.position)}`}>
-                                                            {player.name}
-                                                        </div>
-                                                        <div className={`font-mono text-xs ${getPositionColor(player.position)}`}>
-                                                            {player.position} • {player.team}
-                                                            {player.adp && ` • ADP ${player.adp.toFixed(1)}`}
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="p-2 text-center text-gray-400 font-mono text-xs">
-                                                No players found
+                        {/* Action Buttons */}
+                        <div className="space-y-2">
+                            {/* Manually Assign Player */}
+                            <div>
+                                <button
+                                    className="w-full flex items-center gap-2 p-2 text-left font-mono text-sm text-white hover:bg-gray-800 border border-white/10"
+                                    onClick={() => setShowSearch(true)}
+                                >
+                                    <UserPlus size={16} />
+                                    Manually Assign Player
+                                </button>
+
+                                {/* Player Search - Only show when showSearch is true */}
+                                {showSearch && (
+                                    <div className="mt-2 space-y-2">
+                                        <div className="relative">
+                                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                                            <input
+                                                type="text"
+                                                placeholder="Search players..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="w-full bg-black border border-white/20 text-white pl-8 pr-3 py-1 font-mono text-xs"
+                                                autoFocus
+                                            />
+                                        </div>
+
+                                        {/* Search Results */}
+                                        {searchQuery.length >= 2 && (
+                                            <div className="max-h-32 overflow-y-auto border border-white/10 bg-gray-950">
+                                                {loadingSearch ? (
+                                                    <div className="p-2 text-center text-gray-400 font-mono text-xs">
+                                                        Searching...
+                                                    </div>
+                                                ) : searchResults.length > 0 ? (
+                                                    <div className="divide-y divide-white/10">
+                                                        {searchResults.map((player) => (
+                                                            <button
+                                                                key={`${player.name}-${player.team}`}
+                                                                onClick={() => handleManualAssign(player)}
+                                                                className="w-full p-2 text-left hover:bg-gray-800 transition-colors"
+                                                            >
+                                                                <div className={`font-mono text-xs ${getPositionColor(player.position)}`}>
+                                                                    {player.name}
+                                                                </div>
+                                                                <div className={`font-mono text-xs ${getPositionColor(player.position)}`}>
+                                                                    {player.position} • {player.team}
+                                                                    {player.adp && ` • ADP ${player.adp.toFixed(1)}`}
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-2 text-center text-gray-400 font-mono text-xs">
+                                                        No players found
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                 )}
                             </div>
+
+                            {/* Remove Player */}
+                            {activeCell.hasPlayer && (
+                                <button
+                                    onClick={handleRemovePlayer}
+                                    className="w-full flex items-center gap-2 p-2 text-left font-mono text-sm text-red-400 hover:bg-red-950/20 border border-red-500/20"
+                                >
+                                    <UserMinus size={16} />
+                                    Remove Player
+                                </button>
+                            )}
+
+                            {/* View Player */}
+                            {activeCell.hasPlayer && (
+                                <button
+                                    onClick={handleViewPlayer}
+                                    className="w-full flex items-center gap-2 p-2 text-left font-mono text-sm text-blue-400 hover:bg-blue-950/20 border border-blue-500/20"
+                                >
+                                    <Eye size={16} />
+                                    View Player Details
+                                </button>
+                            )}
                         </div>
-
-                        {/* Remove Player */}
-                        {activeCell.hasPlayer && (
-                            <button
-                                onClick={handleRemovePlayer}
-                                className="w-full flex items-center gap-2 p-2 text-left font-mono text-sm text-red-400 hover:bg-red-950/20 border border-red-500/20"
-                            >
-                                <UserMinus size={16} />
-                                Remove Player
-                            </button>
-                        )}
-
-                        {/* View Player */}
-                        {activeCell.hasPlayer && (
-                            <button
-                                onClick={handleViewPlayer}
-                                className="w-full flex items-center gap-2 p-2 text-left font-mono text-sm text-blue-400 hover:bg-blue-950/20 border border-blue-500/20"
-                            >
-                                <Eye size={16} />
-                                View Player Details
-                            </button>
-                        )}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

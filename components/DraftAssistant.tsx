@@ -171,6 +171,10 @@ export default function DraftAssistant() {
     // Live draft settings - ADD THESE
     const [sleeperUrl, setSleeperUrl] = useState('');
 
+    // USER TURN DETECTION - NEW
+    const [aiSuggestions, setAiSuggestions] = useState<Player[]>([]);
+    const [showSuggestionReasoning, setShowSuggestionReasoning] = useState(false);
+
     // Use refs to track timers and prevent multiple simultaneous picks
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const pickingRef = useRef<boolean>(false);
@@ -382,15 +386,65 @@ export default function DraftAssistant() {
         const hasMinRB = currentRoster?.RB.length >= 2; // Need at least 2 RBs
         const hasMinWR = currentRoster?.WR.length >= 2; // Need at least 2 WRs
 
+        // EARLY ROUND PREMIUM POSITION RESTRICTIONS (Rounds 1-4)
+        const currentRound = Math.ceil(currentPick / leagueSize);
+        const isEarlyRound = currentRound <= 4;
+
+        // Check what premium positions this team has already drafted in early rounds
+        const earlyPicks = currentPicks.filter(pick =>
+            pick.team === teamNumber.toString() &&
+            Math.ceil(pick.pick / leagueSize) <= 4
+        );
+        const hasEarlyQB = earlyPicks.some(pick => pick.position === 'QB');
+        const hasEarlyTE = earlyPicks.some(pick => pick.position === 'TE');
+
         // Filter out positions we shouldn't draft again until core is filled
         let topAvailable = availablePlayers
             .filter(p => p.adp && p.adp < 200)
+            .filter(p => {
+                // EARLY ROUND RESTRICTIONS
+                if (isEarlyRound) {
+                    // Rule 1: Don't draft second QB in early rounds
+                    if (p.position === 'QB' && hasEarlyQB) {
+                        log(`🚫 BLOCKED: ${p.name} (QB) - Team ${teamNumber} already has early QB`);
+                        return false;
+                    }
+
+                    // Rule 2: Don't draft both TE and QB in early rounds
+                    if (p.position === 'QB' && hasEarlyTE) {
+                        log(`🚫 BLOCKED: ${p.name} (QB) - Team ${teamNumber} already has early TE`);
+                        return false;
+                    }
+                    if (p.position === 'TE' && hasEarlyQB) {
+                        log(`🚫 BLOCKED: ${p.name} (TE) - Team ${teamNumber} already has early QB`);
+                        return false;
+                    }
+
+                    // Rule 3: Don't draft second TE in early rounds
+                    if (p.position === 'TE' && hasEarlyTE) {
+                        log(`🚫 BLOCKED: ${p.name} (TE) - Team ${teamNumber} already has early TE`);
+                        return false;
+                    }
+                }
+
+                // EXISTING LATE ROUND RESTRICTIONS (Round 5+)
+                if (!isEarlyRound) {
+                    // Don't draft second QB until very late
+                    if (p.position === 'QB' && hasQB) {
+                        return false;
+                    }
+                    // Don't draft second TE until very late  
+                    if (p.position === 'TE' && hasTE) {
+                        return false;
+                    }
+                }
+
+                return true;
+            })
             .sort((a, b) => (a.adp || 999) - (b.adp || 999))
             .slice(0, 8);
 
         if (topAvailable.length === 0) return null;
-
-
 
         // Check for Brock Bowers
         const brockBowers = topAvailable.find(p => p.name.includes('Brock Bowers'));
@@ -1269,10 +1323,64 @@ export default function DraftAssistant() {
 
     const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<string | null>(null);
 
+    // Calculate if it's the user's turn
+    const isUserTurn = useMemo(() => {
+        if (!isDrafting || !userTeamPosition || isPaused) return false;
+
+        if (mode === 'mock') {
+            return currentTeamOnClock === userTeamPosition;
+        } else if (mode === 'live') {
+            // For live drafts, check if current pick corresponds to user's position
+            const nextPickNumber = picks.length + 1;
+            const round = Math.ceil(nextPickNumber / leagueSize);
+            const isSnakeDraft = true; // Assume snake draft
+
+            let positionInRound;
+            if (isSnakeDraft && round % 2 === 0) {
+                // Even rounds reverse order
+                positionInRound = leagueSize - userTeamPosition + 1;
+            } else {
+                // Odd rounds normal order
+                positionInRound = userTeamPosition;
+            }
+
+            const expectedPickForUser = (round - 1) * leagueSize + positionInRound;
+            return nextPickNumber === expectedPickForUser;
+        }
+
+        return false;
+    }, [mode, isDrafting, userTeamPosition, currentTeamOnClock, picks.length, leagueSize, isPaused]);
+
+    // Mode switching effect - update user position handling
+    useEffect(() => {
+        if (mode === 'mock') {
+            setUserTeamPosition(1); // Default to position 1 for mock drafts
+        } else {
+            setUserTeamPosition(null); // Reset for live drafts - user needs to claim
+        }
+
+        // Reset other mode-specific state
+        setIsDrafting(false);
+        setPicks([]);
+        setCurrentTeamOnClock(1);
+    }, [mode]);
+
+    // Main component render
     return (
         <div className="min-h-screen bg-black text-white">
+            {/* YOUR TURN BANNER */}
+            {isUserTurn && (
+                <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 text-black text-center py-3 font-bold animate-pulse">
+                    <div className="flex items-center justify-center space-x-2">
+                        <Clock size={20} />
+                        <span className="text-lg font-mono">YOUR TURN TO DRAFT</span>
+                        <Clock size={20} />
+                    </div>
+                </div>
+            )}
+
             {/* Settings Panel - Compact Header Row */}
-            <div className="px-4 py-2 border-b border-white/20">
+            <div className={`px-4 py-2 border-b border-white/20 ${isUserTurn ? 'mt-16' : ''}`}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-6">
                         <h3 className="text-sm font-normal" style={{ fontFamily: 'Consolas, monospace' }}>
@@ -1395,13 +1503,49 @@ export default function DraftAssistant() {
                     </div>
                 )}
 
+                {/* Live Draft Position Claim */}
+                {mode === 'live' && (
+                    <div className="mt-2">
+                        <h3 className="text-sm font-mono mb-2">Draft Position</h3>
+                        {!userTeamPosition ? (
+                            <div>
+                                <p className="text-gray-400 mb-2 font-mono text-xs">
+                                    Claim your draft position:
+                                </p>
+                                <div className="grid grid-cols-8 gap-1">
+                                    {Array.from({ length: leagueSize }, (_, i) => i + 1).map(pos => (
+                                        <button
+                                            key={pos}
+                                            onClick={() => setUserTeamPosition(pos)}
+                                            className="p-1 border border-white/20 hover:border-white/40 hover:bg-white/5 font-mono text-xs"
+                                        >
+                                            {pos}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-between p-2 border border-blue-400/50 bg-blue-900/20">
+                                <span className="font-mono text-sm">You are: Team {userTeamPosition}</span>
+                                <button
+                                    onClick={() => setUserTeamPosition(null)}
+                                    className="text-xs text-gray-400 hover:text-white"
+                                >
+                                    Change
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Draft Controls - Second Row for Mock Mode */}
                 {mode === 'mock' && (
                     <div className="mt-2 flex items-center justify-between">
                         {!isDrafting ? (
                             <button
                                 onClick={startMockDraft}
-                                className="bg-green-600 text-white px-4 py-2 border border-green-500 hover:bg-green-700 text-sm"
+                                disabled={!userTeamPosition}
+                                className="bg-green-600 text-white px-4 py-2 border border-green-500 hover:bg-green-700 text-sm disabled:opacity-50"
                                 style={{ fontFamily: 'Consolas, monospace' }}
                             >
                                 start mock draft
@@ -1483,6 +1627,8 @@ export default function DraftAssistant() {
                         isDrafting={isDrafting}
                         mode={mode}
                         teamNames={teamNames}
+                        isUserTurn={isUserTurn}
+                        aiSuggestions={aiSuggestions}
                         onManualAssign={(pickNumber, player) => {
                             const newPick: DraftPick = {
                                 pick: pickNumber,
@@ -1490,7 +1636,7 @@ export default function DraftAssistant() {
                                 player: player.name,
                                 position: player.position,
                                 team: player.team,
-                                sleeper_id: player.sleeper_id // Add this line!
+                                sleeper_id: player.sleeper_id
                             };
                             setPicks(prev => [...prev.filter(p => p.pick !== pickNumber), newPick]);
                         }}
@@ -1508,11 +1654,8 @@ export default function DraftAssistant() {
                                 return;
                             }
 
-                            // Fallback: Search Sleeper's player database by name
                             try {
                                 const { getPlayerByName } = await import('@/lib/sleeper/fetchAllPlayers');
-
-                                // Try to find the player by name in Sleeper's database
                                 const sleeperPlayer = await getPlayerByName(player.player || '');
 
                                 if (sleeperPlayer?.player_id) {
@@ -1520,7 +1663,7 @@ export default function DraftAssistant() {
                                     setSelectedPlayerForModal(sleeperPlayer.player_id);
                                 } else {
                                     console.warn('❌ Player not found in Sleeper database:', player.player);
-                                    alert(`Player "${player.player}" not found in Sleeper database. The name might be formatted differently or the player might not be in Sleeper's database.`);
+                                    alert(`Player "${player.player}" not found in Sleeper database.`);
                                 }
                             } catch (error: any) {
                                 console.error('Error looking up player:', error);
@@ -1579,24 +1722,6 @@ export default function DraftAssistant() {
                                         {pos}
                                     </button>
                                 ))}
-                                <button
-                                    className="px-3 py-1 text-sm bg-black text-white hover:bg-gray-900 border border-white/20"
-                                    style={{ fontFamily: 'Consolas, monospace' }}
-                                >
-                                    watchlist
-                                </button>
-                                <button
-                                    className="px-3 py-1 text-sm bg-black text-white hover:bg-gray-900 border border-white/20"
-                                    style={{ fontFamily: 'Consolas, monospace' }}
-                                >
-                                    show drafted
-                                </button>
-                                <button
-                                    className="px-3 py-1 text-sm bg-black text-white hover:bg-gray-900 border border-white/20"
-                                    style={{ fontFamily: 'Consolas, monospace' }}
-                                >
-                                    rookies only
-                                </button>
 
                                 {/* Draft Timer - Inline with position buttons */}
                                 {isDrafting && !isPaused && (
@@ -1691,11 +1816,8 @@ export default function DraftAssistant() {
                                                                 return;
                                                             }
 
-                                                            // Fallback: Search Sleeper's player database by name
                                                             try {
                                                                 const { getPlayerByName } = await import('@/lib/sleeper/fetchAllPlayers');
-
-                                                                // Try to find the player by name in Sleeper's database
                                                                 const sleeperPlayer = await getPlayerByName(player.name);
 
                                                                 if (sleeperPlayer?.player_id) {
@@ -1703,7 +1825,7 @@ export default function DraftAssistant() {
                                                                     setSelectedPlayerForModal(sleeperPlayer.player_id);
                                                                 } else {
                                                                     console.warn('❌ Player not found in Sleeper database:', player.name);
-                                                                    alert(`Player "${player.name}" not found in Sleeper database. The name might be formatted differently or the player might not be in Sleeper's database.`);
+                                                                    alert(`Player "${player.name}" not found in Sleeper database.`);
                                                                 }
                                                             } catch (error) {
                                                                 console.error('Error looking up player:', error);
