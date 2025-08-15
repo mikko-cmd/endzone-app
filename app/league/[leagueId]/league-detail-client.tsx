@@ -21,6 +21,10 @@ interface RosterData {
   username: string;
   starters: Player[];
   roster: Player[];
+  isPreDraft?: boolean;
+  rosterSettings?: any;
+  totalRosterSpots?: number;
+  leagueStatus?: string;
 }
 
 interface League {
