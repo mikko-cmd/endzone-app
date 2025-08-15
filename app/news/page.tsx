@@ -33,10 +33,6 @@ export default async function NewsPage() {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect('/auth/login');
-  }
-
   return (
     <div className="min-h-screen bg-black text-white p-4 sm:p-8">
       <div className="w-full max-w-6xl mx-auto">

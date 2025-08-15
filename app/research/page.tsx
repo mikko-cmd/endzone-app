@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart3, TrendingUp, DollarSign } from 'lucide-react';
 
@@ -29,43 +28,74 @@ const ResearchCard: React.FC<ResearchCardProps> = ({ title, description, href, i
 
 export default async function ResearchPage() {
   const supabase = createClient();
-  
   const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    redirect('/auth/login');
-  }
+
+  // No authentication required for now
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 sm:p-8">
-      <div className="w-full max-w-6xl mx-auto">
-        <h1 
-          className="text-4xl font-normal mb-8"
-          style={{ fontFamily: 'Consolas, monospace' }}
-        >
-          [research]
-        </h1>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="text-center mb-12">
+          <h1
+            className="text-4xl font-bold mb-4"
+            style={{ fontFamily: 'Consolas, monospace' }}
+          >
+            [research hub]
+          </h1>
+          <p className="text-xl text-gray-400" style={{ fontFamily: 'Consolas, monospace' }}>
+            Advanced analytics and player insights
+          </p>
+        </div>
+
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           <ResearchCard
-            title="Players"
-            description="Player stats, game logs, and analysis"
+            title="player analysis"
+            description="Comprehensive player statistics, trends, and performance metrics"
             href="/research/players"
-            icon={<BarChart3 size={20} />}
+            icon={<BarChart3 size={24} />}
           />
           <ResearchCard
-            title="ADP & Rankings"
-            description="Draft rankings and ADP trends"
+            title="adp rankings"
+            description="Average Draft Position data and trends across different platforms"
             href="/research/adp"
-            icon={<TrendingUp size={20} />}
+            icon={<TrendingUp size={24} />}
           />
           <ResearchCard
-            title="DFS Tools"
-            description="Daily fantasy projections and optimization"
+            title="dfs tools"
+            description="Daily Fantasy Sports optimization and lineup construction tools"
             href="/research/dfs"
-            icon={<DollarSign size={20} />}
+            icon={<DollarSign size={24} />}
           />
         </div>
+
+        {!user && (
+          <div className="mt-12 text-center">
+            <div className="bg-gray-900 rounded-lg p-6 max-w-2xl mx-auto">
+              <h3 className="text-xl font-bold mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+                Get More Research Tools
+              </h3>
+              <p className="text-gray-400 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+                Sign up for advanced analytics, player comparisons, and premium research features
+              </p>
+              <div className="space-x-4">
+                <Link
+                  href="/auth/login"
+                  className="inline-block px-4 py-2 text-white hover:text-blue-400 transition-colors border border-gray-600 rounded-md hover:border-blue-400"
+                  style={{ fontFamily: 'Consolas, monospace' }}
+                >
+                  [login]
+                </Link>
+                <Link
+                  href="/auth/signup"
+                  className="inline-block px-4 py-2 bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+                  style={{ fontFamily: 'Consolas, monospace' }}
+                >
+                  [signup]
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

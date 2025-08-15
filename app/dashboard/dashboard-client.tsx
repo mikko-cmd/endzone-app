@@ -82,32 +82,42 @@ const HubTile: React.FC<HubTileProps> = ({ title, description, href, icon }) => 
 };
 
 interface DashboardClientProps {
-  user: User;
   initialLeagues: League[];
+  isAuthenticated: boolean;
+  userEmail: string | null;
 }
 
 export default function DashboardClient({
-  user,
   initialLeagues,
+  isAuthenticated,
+  userEmail
 }: DashboardClientProps) {
+  const [leagues, setLeagues] = useState<League[]>(initialLeagues);
   const [leagueId, setLeagueId] = useState('');
   const [sleeperUsername, setSleeperUsername] = useState('');
-  const [leagues, setLeagues] = useState<League[]>(initialLeagues);
   const [syncingLeague, setSyncingLeague] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [isManualMode, setIsManualMode] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
 
-  // Debug: Log user object to see what's available
-  console.log('User object:', user);
-  console.log('User metadata:', user.user_metadata);
+  // Remove the problematic user debug lines (lines 104-109) and replace with:
+  const userDisplayName = isAuthenticated
+    ? (userEmail?.split('@')[0] || 'User')
+    : 'Guest';
 
-  // Get first name from user metadata, fallback to email if not available
-  const userDisplayName = user.user_metadata?.first_name || user.email;
-
+  // Update the sync league function to use userEmail instead of user.email:
   const handleSyncLeague = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      alert('Please sign up or log in to connect a league');
+      router.push('/auth/signup');
+      return;
+    }
+
     if (!leagueId || !sleeperUsername) {
       return;
     }
@@ -116,10 +126,13 @@ export default function DashboardClient({
     try {
       const response = await fetch('/api/sync-league', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          sleeper_league_id: leagueId,
-          sleeper_username: sleeperUsername,
+          leagueId,
+          sleeperUsername,
+          userEmail, // Use the prop instead of user.email
         }),
       });
 
@@ -140,15 +153,140 @@ export default function DashboardClient({
         return [...prevLeagues, newLeague];
       });
 
-      setIsModalOpen(false);
+      // setIsModalOpen(false); // This line was removed from the original file
       setLeagueId('');
       setSleeperUsername('');
     } catch (error: any) {
-      console.error('Connection failed:', error);
-      alert('Failed to connect league: ' + error.message);
+      console.error('Sync error:', error);
+      setSyncError('Failed to sync league. Please try again.');
     } finally {
       setSyncingLeague(false);
     }
+  };
+
+  // Add a banner for guest users
+  const renderGuestBanner = () => {
+    if (isAuthenticated) return null;
+
+    return (
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 rounded-lg mb-8">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Consolas, monospace' }}>
+            Welcome to Endzone Fantasy Football
+          </h2>
+          <p className="text-blue-100 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+            Get AI-powered trade suggestions, player analysis, and league insights
+          </p>
+          <div className="space-x-4">
+            <Link
+              href="/auth/signup"
+              className="inline-block px-6 py-3 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              Sign Up Free
+            </Link>
+            <Link
+              href="/auth/login"
+              className="inline-block px-6 py-3 border border-white text-white rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              Login
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Update the activity feed section
+  const renderActivitySection = () => {
+    if (!isAuthenticated) {
+      return (
+        <div className="bg-black border border-white/20 p-6" style={{ fontFamily: 'Consolas, monospace' }}>
+          <h3 className="text-xl font-normal text-white mb-4">
+            [Recent Activity]
+          </h3>
+          <div className="text-center py-8">
+            <p className="text-gray-400 mb-4">
+              Sign up or log in to view your league's activity
+            </p>
+            <div className="space-x-4">
+              <Link
+                href="/auth/login"
+                className="inline-block px-4 py-2 text-white hover:text-blue-400 transition-colors border border-gray-600 rounded-md hover:border-blue-400"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                [login]
+              </Link>
+              <Link
+                href="/auth/signup"
+                className="inline-block px-4 py-2 bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                [signup]
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Show normal ActivityFeed for authenticated users
+    return <ActivityFeed />;
+  };
+
+  // Update leagues section
+  const renderLeaguesSection = () => {
+    const noLeaguesMessage = isAuthenticated
+      ? "No leagues connected. Connect your first league above!"
+      : "Sign up or log in to connect and manage your leagues";
+
+    if (leagues.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-400 mb-4" style={{ fontFamily: 'Consolas, monospace' }}>
+            {noLeaguesMessage}
+          </p>
+          {!isAuthenticated && (
+            <div className="space-x-4">
+              <Link
+                href="/auth/login"
+                className="inline-block px-4 py-2 text-white hover:text-blue-400 transition-colors border border-gray-600 rounded-md hover:border-blue-400"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                [login]
+              </Link>
+              <Link
+                href="/auth/signup"
+                className="inline-block px-4 py-2 bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+                style={{ fontFamily: 'Consolas, monospace' }}
+              >
+                [signup]
+              </Link>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Show leagues for authenticated users
+    return (
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {leagues.map((league) => (
+          <LeagueCard key={league.id} league={league} />
+        ))}
+      </div>
+    );
+  };
+
+  // Add to the Quick Access Links section
+  const handleConnectLeagueClick = () => {
+    if (!isAuthenticated) {
+      alert('Please sign up or log in to connect a league');
+      router.push('/auth/signup');
+      return;
+    }
+    router.push('/leagues');
   };
 
   return (
@@ -179,12 +317,24 @@ export default function DashboardClient({
             [quick access]
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <HubTile
-              title="My Leagues"
-              description="View and manage your fantasy leagues"
-              href="/leagues"
-              icon={<Users size={20} />}
-            />
+            <div
+              onClick={handleConnectLeagueClick}
+              className="bg-black border border-white/20 p-6 h-full transition-all duration-200 hover:border-white/40 hover:bg-gray-900 cursor-pointer"
+              style={{ fontFamily: 'Consolas, monospace' }}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <Users size={20} className="text-white" />
+                  <h3 className="text-lg font-normal text-white">[My Leagues]</h3>
+                </div>
+              </div>
+              <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+                {isAuthenticated
+                  ? "View and manage your fantasy leagues"
+                  : "Connect your fantasy leagues (Login Required)"
+                }
+              </p>
+            </div>
             <HubTile
               title="AI Tools"
               description="Player comparisons, waiver picks, trades"
@@ -216,7 +366,7 @@ export default function DashboardClient({
               [your leagues]
             </h2>
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => setIsManualMode(true)} // Changed to setIsManualMode
               className="px-4 py-2 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200 flex items-center"
               style={{ fontFamily: 'Consolas, monospace' }}
             >
@@ -225,21 +375,7 @@ export default function DashboardClient({
             </button>
           </div>
 
-          {leagues.length === 0 ? (
-            <div
-              className="text-center text-gray-400 space-y-2 py-8"
-              style={{ fontFamily: 'Consolas, monospace' }}
-            >
-              <p>no leagues connected yet</p>
-              <p className="text-sm">click the button above to get started</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {leagues.map(league => (
-                <LeagueCard key={league.id} league={league} />
-              ))}
-            </div>
-          )}
+          {renderLeaguesSection()}
         </section>
 
         {/* Recent Activity */}
@@ -250,11 +386,11 @@ export default function DashboardClient({
           >
             [recent activity]
           </h2>
-          <ActivityFeed />
+          {renderActivitySection()}
         </section>
 
         {/* Modal */}
-        {isModalOpen && (
+        {isManualMode && ( // Changed to isManualMode
           <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-900 border border-gray-700 p-8 w-full max-w-md">
               <h2
@@ -301,7 +437,7 @@ export default function DashboardClient({
                 <div className="flex justify-center space-x-4 pt-4">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={() => setIsManualMode(false)} // Changed to setIsManualMode
                     className="px-6 py-2 text-gray-400 hover:text-white transition-colors"
                     style={{ fontFamily: 'Consolas, monospace' }}
                     disabled={syncingLeague}

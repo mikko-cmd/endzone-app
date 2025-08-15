@@ -20,5 +20,9 @@ export default async function Dashboard() {
     console.error('Failed to fetch leagues:', error)
   }
 
-  return <DashboardClient user={user} initialLeagues={leagues || []} />
+  return <DashboardClient 
+    initialLeagues={leagues || []} 
+    isAuthenticated={!!user}
+    userEmail={user?.email || null}
+  />
 } 

@@ -195,6 +195,7 @@ interface League {
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false); // Add this line
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [userLeagues, setUserLeagues] = useState<League[]>([]);
     const [leaguesLoading, setLeaguesLoading] = useState(true);
@@ -239,6 +240,18 @@ export default function Navbar() {
         window.addEventListener('leagueDeleted', handleLeagueDeleted);
         return () => window.removeEventListener('leagueDeleted', handleLeagueDeleted);
     }, [userEmail]);
+
+    // Add useEffect to close user menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (isUserMenuOpen) {
+                setIsUserMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [isUserMenuOpen]);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -288,9 +301,9 @@ export default function Navbar() {
     const navItems = [
         {
             title: 'Home',
-            mainHref: '/dashboard', // Add main page URL
+            mainHref: '/', // Change from '/dashboard' to '/'
             items: [
-                { label: 'Dashboard', href: '/dashboard', disabled: false },
+                { label: 'Dashboard', href: '/', disabled: false }, // Change to '/'
                 { label: 'Activity Feed', href: '/dashboard/activity', disabled: false },
             ]
         },
@@ -342,7 +355,7 @@ export default function Navbar() {
                 <div className="flex justify-between items-center h-16">
                     {/* Logo */}
                     <Link
-                        href="/dashboard"
+                        href="/" // Change from "/dashboard" to "/"
                         className="text-xl font-normal text-white hover:text-gray-300 transition-colors duration-200"
                         style={{ fontFamily: 'Consolas, monospace' }}
                         onClick={closeAllDropdowns}
@@ -366,23 +379,61 @@ export default function Navbar() {
                         ))}
                     </div>
 
-                    {/* User Menu */}
+                    {/* User Authentication Section */}
                     <div className="flex items-center space-x-4">
-                        {userEmail && (
-                            <span
-                                className="hidden sm:block text-sm text-gray-400"
-                                style={{ fontFamily: 'Consolas, monospace' }}
-                            >
-                                {userEmail}
-                            </span>
+                        {userEmail ? (
+                            // Logged in user - show avatar dropdown
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                                    className="flex items-center text-white hover:text-blue-400 transition-colors"
+                                    style={{ fontFamily: 'Consolas, monospace' }}
+                                >
+                                    <User className="h-5 w-5 mr-1" />
+                                    <span className="hidden md:inline">{userEmail}</span>
+                                    <ChevronDown className="h-4 w-4 ml-1" />
+                                </button>
+
+                                {isUserMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-600 rounded-md shadow-lg z-50">
+                                        <div className="py-2">
+                                            <button
+                                                onClick={() => router.push('/settings/account')}
+                                                className="block w-full text-left px-4 py-2 text-white hover:bg-gray-700 transition-colors"
+                                                style={{ fontFamily: 'Consolas, monospace' }}
+                                            >
+                                                Account Settings
+                                            </button>
+                                            <button
+                                                onClick={handleLogout}
+                                                className="block w-full text-left px-4 py-2 text-white hover:bg-gray-700 transition-colors"
+                                                style={{ fontFamily: 'Consolas, monospace' }}
+                                            >
+                                                [log out]
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            // Guest user - show login/signup
+                            <div className="flex items-center space-x-2">
+                                <Link
+                                    href="/auth/login"
+                                    className="px-3 py-1 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200"
+                                    style={{ fontFamily: 'Consolas, monospace' }}
+                                >
+                                    [log in]
+                                </Link>
+                                <Link
+                                    href="/auth/signup"
+                                    className="px-3 py-1 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200"
+                                    style={{ fontFamily: 'Consolas, monospace' }}
+                                >
+                                    [sign up]
+                                </Link>
+                            </div>
                         )}
-                        <button
-                            onClick={handleLogout}
-                            className="hidden md:block px-3 py-1 text-white border border-white hover:bg-white hover:text-black transition-colors duration-200"
-                            style={{ fontFamily: 'Consolas, monospace' }}
-                        >
-                            [log out]
-                        </button>
 
                         {/* Mobile menu button */}
                         <button

@@ -15,11 +15,11 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
     const pathname = usePathname();
     const supabase = createClient();
 
-    // Routes where we never want to show the navbar (even if authenticated)
-    const publicRoutes = ['/', '/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/auth-code-error'];
+    // Routes where we never want to show the navbar
+    const noNavbarRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/auth-code-error'];
 
-    // Check if current route is a public route
-    const isPublicRoute = publicRoutes.includes(pathname);
+    // Check if current route should hide navbar
+    const shouldHideNavbar = noNavbarRoutes.includes(pathname);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -45,8 +45,18 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
         return () => subscription.unsubscribe();
     }, [supabase]);
 
-    // Determine if we should show the navbar
-    const showNavbar = !isPublicRoute && !isLoading && isAuthenticated;
+    // Show navbar everywhere except auth pages, and only when not loading
+    const showNavbar = !shouldHideNavbar && !isLoading;
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="text-white" style={{ fontFamily: 'Consolas, monospace' }}>
+                    Loading...
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>
