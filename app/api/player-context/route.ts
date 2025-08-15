@@ -44,7 +44,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlayerCont
             athleteId || undefined
         );
 
-        const contextualFactors = contextEngine.getPlayerContextualFactors(context);
+        const contextualFactors = await contextEngine.getPlayerContextualFactors(playerName, team, position);
 
         return NextResponse.json({
             success: true,
