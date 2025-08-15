@@ -298,8 +298,8 @@ export class ContextEngine {
 
         // Analyze home/away performance
         if (splits.homeAway) {
-            const home = splits.homeAway.find(s => s.name === 'Home');
-            const away = splits.homeAway.find(s => s.name === 'Away');
+            const home = splits.homeAway.find((s: any) => s.name === 'Home');
+            const away = splits.homeAway.find((s: any) => s.name === 'Away');
 
             if (home && away) {
                 const homePPG = home.stats?.fantasyPoints / home.stats?.games || 0;
@@ -343,7 +343,7 @@ export class ContextEngine {
                 // Find best match using name normalization
                 player = players?.find(p =>
                     this.normalizePlayerName(p.name) === normalizedName
-                );
+                ) || null;
             }
 
             return player?.espn_id || undefined;
@@ -527,7 +527,7 @@ export class ContextEngine {
     invalidatePlayerCache(playerName: string): void {
         const keysToDelete: string[] = [];
 
-        for (const [key, _] of this.playerContextCache) {
+        for (const [key, _] of Array.from(this.playerContextCache)) {
             if (key.includes(playerName)) {
                 keysToDelete.push(key);
             }

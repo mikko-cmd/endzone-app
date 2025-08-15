@@ -32,6 +32,7 @@ interface WaiverWireData {
     rosteredCount: number;
     filterApplied: string;
   };
+  summary?: { total_available: number };
 }
 
 interface WaiverWireAssistantProps {
@@ -193,7 +194,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
               [team needs analysis]
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {data.team_needs && Object.entries(data.team_needs).map(([position, need]) => (
+              {data.teamNeeds && Object.entries(data.teamNeeds).map(([position, need]: [string, any]) => (
                 <div key={position} className="text-center">
                   <div
                     className="text-sm text-gray-400"
@@ -215,7 +216,7 @@ export default function WaiverWireAssistant({ leagueId }: WaiverWireAssistantPro
                   </div>
                 </div>
               ))}
-              {!data.team_needs && (
+              {!data.teamNeeds && (
                 <div className="text-gray-400 text-center col-span-full">
                   Team needs analysis not available
                 </div>

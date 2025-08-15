@@ -8,12 +8,12 @@ import { ChevronDown, Menu, X, User } from 'lucide-react';
 
 interface NavDropdownProps {
     title: string;
-    items: { label: string; href: string; disabled?: boolean }[];
+    items: { label: string; href: string; disabled?: boolean; subItems?: { label: string; href: string }[] }[];
     isOpen: boolean;
     onToggle: () => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
-    mainHref?: string; // Add main page URL for the dropdown title
+    mainHref?: string;
 }
 
 const NavDropdown = ({
@@ -151,7 +151,7 @@ const NavDropdown = ({
                                         </div>
                                         {openSubMenu === item.label && (
                                             <div className="absolute left-full top-0 w-48 bg-black border border-white shadow-lg z-50">
-                                                {item.subItems!.map((subItem, subIndex) => (
+                                                {item.subItems!.map((subItem: any, subIndex: number) => (
                                                     <Link
                                                         key={subIndex}
                                                         href={subItem.href}
@@ -201,6 +201,21 @@ export default function Navbar() {
     const router = useRouter();
     const supabase = createClient();
 
+    const fetchUserLeagues = async () => {
+        if (!userEmail) return;
+        try {
+            const response = await fetch(`/api/leagues/get?user_email=${encodeURIComponent(userEmail)}`);
+            const data = await response.json();
+            if (data.success) {
+                setUserLeagues(data.data);
+            }
+        } catch (error: any) {
+            console.error('Failed to fetch user leagues:', error);
+        } finally {
+            setLeaguesLoading(false);
+        }
+    };
+
     useEffect(() => {
         const getUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
@@ -210,23 +225,6 @@ export default function Navbar() {
     }, [supabase]);
 
     useEffect(() => {
-        const fetchUserLeagues = async () => {
-            if (!userEmail) return;
-
-            try {
-                const response = await fetch(`/api/leagues/get?user_email=${encodeURIComponent(userEmail)}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    setUserLeagues(data.data);
-                }
-            } catch (error: any) {
-                console.error('Failed to fetch user leagues:', error);
-            } finally {
-                setLeaguesLoading(false);
-            }
-        };
-
         fetchUserLeagues();
     }, [userEmail]);
 

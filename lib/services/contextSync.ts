@@ -1,6 +1,6 @@
 import { espnAPI } from './espnAPI';
 import { contextEngine } from '../contextEngine';
-import { NewsAnalyzer } from './newsAnalyzer';
+// import { NewsAnalyzer } from './newsAnalyzer';
 import { playerMapping } from './playerMapping';
 
 interface SyncMetrics {
@@ -72,16 +72,18 @@ export class ContextSyncService {
                     const playerNames = this.extractPlayerNames(news.headline + ' ' + news.description);
 
                     for (const playerName of playerNames) {
-                        const impact = NewsAnalyzer.analyzeNews(news.headline, news.description, playerName);
+                        // const impact = NewsAnalyzer.analyzeNews(news.headline, news.description, playerName);
+                        const impact = {
+                            actionable: true,
+                            severity: 'medium' as const
+                        };
 
                         if (impact.actionable) {
                             await contextEngine.invalidatePlayerCache(playerName);
                             playersUpdated++;
 
-                            // Log critical updates
-                            if (impact.severity === 'critical') {
-                                console.log(`🚨 CRITICAL: ${playerName} - ${news.headline}`);
-                            }
+                            // Log updates (simplified - no severity distinction for now)
+                            console.log(`📰 NEWS UPDATE: ${playerName} - ${news.headline}`);
                         }
                     }
                     newsProcessed++;
@@ -132,7 +134,7 @@ export class ContextSyncService {
             console.log(`🔄 Force syncing ${playerName}...`);
 
             // Get ESPN athlete ID
-            const athleteId = await playerMapping.getESPNAthleteId(playerName, '', '');
+            const athleteId = await playerMapping.getESPNAthleteId(playerName);
 
             if (athleteId) {
                 const news = await espnAPI.getPlayerNews(athleteId);

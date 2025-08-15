@@ -22,7 +22,7 @@ interface RosterData {
   starters: Player[];
   roster: Player[];
   isPreDraft?: boolean;
-  rosterSettings?: any;
+  rosterSettings?: Record<string, number>;
   totalRosterSpots?: number;
   leagueStatus?: string;
 }
@@ -260,7 +260,7 @@ export default function LeagueDetailClient({ league }: { league: League }) {
                       {position}
                     </p>
                     <p className="text-2xl text-blue-400" style={{ fontFamily: 'Consolas, monospace' }}>
-                      {count}
+                      {count as number}
                     </p>
                   </div>
                 </div>

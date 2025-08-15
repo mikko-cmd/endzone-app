@@ -515,7 +515,7 @@ export default function DraftAssistant() {
         // ... rest of existing candidate selection logic
 
         // Create weighted selection pools
-        let finalCandidates = [];
+        let finalCandidates: any[] = [];
 
         // 1. POSITIONAL NEED BONUS (if team has clear needs)
         const needCandidates = topAvailable.filter(p => needs.includes(p.position));
@@ -554,7 +554,7 @@ export default function DraftAssistant() {
         // 2. CALCULATE DYNAMIC WEIGHTS based on ADP proximity
         const bestADP = finalCandidates[0].adp;
         const weights = finalCandidates.map((player, index) => {
-            const adpGap = player.adp - bestADP;
+            const adpGap = (player.adp || 0) - (bestADP || 0);
 
             // Base weight starts high and decreases
             let weight = 100 - (index * 20); // 100, 80, 60, 40, 20
@@ -568,7 +568,7 @@ export default function DraftAssistant() {
             const round = Math.ceil(currentPickRef.current / leagueSize);
             if (round === 1) {
                 // Round 1: VERY predictable, elite players shouldn't fall
-                if (index === 0 && player.adp <= 6) {
+                if (index === 0 && (player.adp || 0) <= 6) {
                     weight *= 3.0; // Massive boost for top 6 ADP players in round 1
                 } else {
                     weight *= 1.5; // Still boost first option significantly
@@ -1707,8 +1707,10 @@ export default function DraftAssistant() {
 
             topCandidates.push(...bestAvailable.map(player => ({
                 ...player,
-                suggestionScore: 1,
-                suggestionReasons: ['Best available by ADP']
+                suggestionScore: 0,  // Remove player.suggestionScore reference
+                suggestionReasons: ['Best available by ADP'],
+                conflictScore: 0,  // Add this
+                conflictReasons: [] // Add this
             })));
         }
 

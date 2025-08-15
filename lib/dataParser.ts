@@ -298,7 +298,7 @@ export class DataParser {
                     const columns = this.parseCSVLine(line);
 
                     if (columns.length >= 6) {
-                        let redZoneEntry: RedZoneData;
+                        let redZoneEntry: RedZoneData | undefined = undefined;
 
                         if (pos === 'qb') {
                             // QB: columns 0-1 = Name,Team; columns 2-7 = ATT,ATT%,CMP,CMP%,TDS,TD% (red zone)
@@ -1104,7 +1104,7 @@ export class DataParser {
 
     getRookieDraftInfo(playerName: string): RookieDraftCapitalData | null {
         return this.rookieDraftCapital.find(entry =>
-            entry.playerName.toLowerCase() === playerName.toLowerCase()
+            entry.rookiePlayer.toLowerCase() === playerName.toLowerCase()
         ) || null;
     }
 }
