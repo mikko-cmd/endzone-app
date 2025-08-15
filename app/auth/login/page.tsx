@@ -161,6 +161,16 @@ function LoginForm() {
 
       <div className="mt-4 text-center">
         <Link
+          href="/auth/forgot-password"
+          className="text-gray-400 hover:text-white transition-colors text-sm"
+          style={{ fontFamily: 'Consolas, monospace' }}
+        >
+          [forgot password?]
+        </Link>
+      </div>
+
+      <div className="mt-4 text-center">
+        <Link
           href="/"
           className="text-gray-400 hover:text-white transition-colors text-sm"
           style={{ fontFamily: 'Consolas, monospace' }}
