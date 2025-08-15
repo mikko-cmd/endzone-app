@@ -290,19 +290,8 @@ export default function SnakeDraftBoard({
                 </div>
             )}
 
-            {/* YOUR TURN BANNER - Add this above the existing header */}
-            {isUserTurn && (
-                <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 text-black text-center py-3 font-bold animate-pulse">
-                    <div className="flex items-center justify-center space-x-2">
-                        <Clock size={20} />
-                        <span className="text-lg font-mono">YOUR TURN TO DRAFT</span>
-                        <Clock size={20} />
-                    </div>
-                </div>
-            )}
-
-            {/* Push content down when banner is visible */}
-            <div className={`min-h-screen bg-black text-white ${isUserTurn ? 'pt-16' : ''}`}>
+            {/* Draft Grid */}
+            <div className="min-h-screen bg-black text-white">
                 {/* Team Headers */}
                 <div className="grid border-b border-white/20 mb-2"
                     style={{ gridTemplateColumns: `repeat(${leagueSize}, minmax(120px, 1fr))`, gap: '1px' }}>

@@ -1365,22 +1365,406 @@ export default function DraftAssistant() {
         setCurrentTeamOnClock(1);
     }, [mode]);
 
+    // AI Suggestion Engine - Calculate which players to bracket
+    const calculateAISuggestions = useCallback((): Player[] => {
+        // Only show suggestions when it's the user's turn
+        if (!isUserTurn || !userTeamPosition || isPaused || !isDrafting) {
+            return [];
+        }
+
+        const currentRound = Math.ceil(nextPick / leagueSize);
+
+        // Get available players (not drafted)
+        const draftedPlayerNames = new Set(picks.map(pick => pick.player).filter(Boolean));
+        const availablePlayers = allPlayers.filter(player => !draftedPlayerNames.has(player.name));
+
+        if (availablePlayers.length === 0) return [];
+
+        // 1. VALUE ANALYSIS - Players falling below their ADP
+        const valuePickCandidates = availablePlayers.filter(player => {
+            if (!player.adp) return false;
+            return player.adp < nextPick; // Player is falling
+        }).sort((a, b) => {
+            const aGap = nextPick - (a.adp || 999);
+            const bGap = nextPick - (b.adp || 999);
+            return bGap - aGap; // Sort by biggest gap (most value)
+        });
+
+        // 2. TEAM STACKING CONFLICT DETECTION
+        const myDraftedPlayers = Object.values(myRoster).flat();
+
+        const candidatesWithConflictAnalysis = availablePlayers.map(player => {
+            let conflictScore = 0;
+            let conflictReasons: string[] = [];
+
+            // Check for same NFL team conflicts
+            const sameTeamPlayers = myDraftedPlayers.filter(rostered =>
+                rostered.team === player.team
+            );
+
+            if (sameTeamPlayers.length > 0) {
+                const samePositionConflicts = sameTeamPlayers.filter(rostered =>
+                    rostered.position === player.position
+                );
+
+                if (samePositionConflicts.length > 0) {
+                    // HIGH conflict: Same team + same position
+                    conflictScore = 10;
+                    conflictReasons.push(`Same team + position as ${samePositionConflicts[0].name}`);
+                } else {
+                    // MEDIUM conflict: Same team, different position
+                    conflictScore = 5;
+                    conflictReasons.push(`Same team as ${sameTeamPlayers[0].name}`);
+                }
+            }
+
+            return {
+                ...player,
+                conflictScore,
+                conflictReasons
+            };
+        });
+
+        // 3. POSITIONAL BALANCE ANALYSIS
+        const positionCounts = {
+            QB: myRoster.QB.length,
+            RB: myRoster.RB.length,
+            WR: myRoster.WR.length,
+            TE: myRoster.TE.length,
+            FLEX: myRoster.FLEX.length
+        };
+
+        // EARLY ROUND STACKING PREVENTION - Check first 3 picks IN DRAFT ORDER
+        let firstThreePickPositions: string[] = [];
+
+        if (userTeamPosition) {
+            // Get user's picks in draft order
+            const userPicks = picks.filter(pick => {
+                const round = Math.ceil(pick.pick / leagueSize);
+                let userPickInRound;
+
+                if (round % 2 === 0) {
+                    // Even rounds reverse order  
+                    userPickInRound = (round - 1) * leagueSize + (leagueSize - userTeamPosition + 1);
+                } else {
+                    // Odd rounds normal order
+                    userPickInRound = (round - 1) * leagueSize + userTeamPosition;
+                }
+
+                return pick.pick === userPickInRound;
+            });
+
+            firstThreePickPositions = userPicks.slice(0, 3).map(pick => pick.position || '').filter(Boolean);
+        }
+
+        const hasThreeEarlyRBs = firstThreePickPositions.filter(pos => pos === 'RB').length === 3;
+        const hasThreeEarlyWRs = firstThreePickPositions.filter(pos => pos === 'WR').length === 3;
+
+        console.log('🎯 Early Round Analysis:', {
+            round: currentRound,
+            userTeamPosition,
+            firstThreePicks: firstThreePickPositions,
+            hasThreeEarlyRBs,
+            hasThreeEarlyWRs,
+            userPicksCount: firstThreePickPositions.length
+        });
+
+        // Define positional priorities by round
+        const getPositionalPriority = (position: string, round: number): number => {
+            // EARLY ROUND STACKING RULES (Rounds 1-3 stacking prevention)
+            if (currentRound === 4 && firstThreePickPositions.length === 3) {
+                if (hasThreeEarlyRBs) {
+                    // 3 RBs in first 3 rounds - HEAVILY favor WRs
+                    if (position === 'WR') return 15; // VERY HIGH priority
+                    if (position === 'RB') return 1;  // VERY LOW priority
+                    if (position === 'QB') return 2;  // LOW priority
+                    if (position === 'TE') return 2;  // LOW priority
+                    return 3; // Other positions low
+                }
+
+                if (hasThreeEarlyWRs) {
+                    // 3 WRs in first 3 rounds - HEAVILY favor RBs
+                    if (position === 'RB') return 15; // VERY HIGH priority
+                    if (position === 'WR') return 1;  // VERY LOW priority
+                    if (position === 'QB') return 2;  // LOW priority
+                    if (position === 'TE') return 3;  // MEDIUM-LOW priority
+                    return 4; // Other positions medium-low
+                }
+            }
+
+            // Calculate roster completeness for normal logic
+            const hasStartingQB = positionCounts.QB >= 1;
+            const hasStartingRBs = positionCounts.RB >= 2;
+            const hasStartingWRs = positionCounts.WR >= 2;
+            const hasStartingTE = positionCounts.TE >= 1;
+
+            const corePositionsFilled = hasStartingQB && hasStartingRBs && hasStartingWRs && hasStartingTE;
+            const hasMinimumStarters = hasStartingRBs && hasStartingWRs;
+
+            if (round <= 4) {
+                // Early rounds: PRIORITIZE CORE STARTERS FIRST
+
+                // HIGH PRIORITY: Missing core starters
+                if (position === 'RB' && positionCounts.RB < 2) return 10;
+                if (position === 'WR' && positionCounts.WR < 2) return 10;
+
+                // CONTEXT-AWARE RB/WR decisions
+                if (position === 'RB' && positionCounts.RB >= 3) {
+                    if (!hasMinimumStarters) {
+                        return 2; // Bad - still need other core positions
+                    } else if (corePositionsFilled) {
+                        return 7; // OK - depth after core is filled
+                    } else {
+                        return 4; // Neutral - some core filled but not all
+                    }
+                }
+
+                if (position === 'WR' && positionCounts.WR >= 3) {
+                    if (!hasMinimumStarters) {
+                        return 3; // Better than 4th RB but still not ideal
+                    } else if (corePositionsFilled) {
+                        return 7; // Good depth
+                    } else {
+                        return 5; // Decent depth
+                    }
+                }
+
+                // PREMIUM POSITIONS: Only after core or if elite value
+                if (position === 'QB') {
+                    if (positionCounts.QB >= 1) return 2; // Devalue second QB early
+                    if (!hasMinimumStarters) return 4; // QB can wait if missing RB/WR
+                    return 6; // Good time for QB
+                }
+
+                if (position === 'TE') {
+                    if (positionCounts.TE >= 1) return 2; // Devalue second TE early
+                    if (!hasMinimumStarters) return 5; // TE can wait
+                    return 7; // Good time for TE
+                }
+
+                return 6; // Default
+
+            } else if (round <= 8) {
+                // Mid rounds: FILL OUT ROSTER, DEPTH OK
+
+                // Missing core positions get priority
+                if (position === 'QB' && positionCounts.QB === 0) return 9;
+                if (position === 'TE' && positionCounts.TE === 0) return 8;
+                if (position === 'RB' && positionCounts.RB < 2) return 8;
+                if (position === 'WR' && positionCounts.WR < 2) return 8;
+
+                // Depth is generally good now
+                if (position === 'RB') return 7;
+                if (position === 'WR') return 7;
+                if (position === 'TE' && positionCounts.TE < 2) return 6;
+
+                return 5;
+            } else {
+                // Late rounds: UPSIDE AND DEPTH
+                return 5;
+            }
+        };
+
+        // 4. CALCULATE FINAL SCORES
+        const scoredCandidates = candidatesWithConflictAnalysis.map(player => {
+            let score = 0;
+            const reasons: string[] = [];
+
+            // Value score (30% weight)
+            const valueGap = nextPick - (player.adp || 999);
+            if (valueGap > 0) {
+                const valueScore = Math.min(valueGap * 2, 20); // Cap at 20 points
+                score += valueScore * 0.3;
+                if (valueGap >= 3) {
+                    reasons.push(`Falling ${valueGap.toFixed(1)} picks`);
+                }
+            }
+
+            // Positional priority (40% weight)
+            const positionPriority = getPositionalPriority(player.position, currentRound);
+            score += positionPriority * 0.4;
+
+            // ADP ranking bonus (20% weight)
+            if (player.adp && player.adp <= 100) {
+                const adpBonus = (100 - player.adp) / 10;
+                score += adpBonus * 0.2;
+            }
+
+            // Apply conflict penalty (subtract from total)
+            score -= player.conflictScore;
+            if (player.conflictReasons.length > 0) {
+                reasons.push(...player.conflictReasons);
+            }
+
+            // Need-based bonus & penalties - CONTEXT AWARE
+            if (currentRound <= 8) {
+                const hasStartingRBs = positionCounts.RB >= 2;
+                const hasStartingWRs = positionCounts.WR >= 2;
+                const hasStartingTE = positionCounts.TE >= 1;
+                const hasStartingQB = positionCounts.QB >= 1;
+                const corePositionsFilled = hasStartingQB && hasStartingRBs && hasStartingWRs && hasStartingTE;
+
+                // STRONG bonus for missing starters
+                if (player.position === 'RB' && positionCounts.RB < 2) {
+                    score += 7;
+                    reasons.push('Need starting RB');
+                }
+                if (player.position === 'WR' && positionCounts.WR < 2) {
+                    score += 7;
+                    reasons.push('Need starting WR');
+                }
+                if (player.position === 'TE' && positionCounts.TE === 0 && currentRound >= 3) {
+                    score += 6;
+                    reasons.push('Need starting TE');
+                }
+                if (player.position === 'QB' && positionCounts.QB === 0 && currentRound >= 4) {
+                    score += 5;
+                    reasons.push('Need starting QB');
+                }
+
+                // CONTEXT-AWARE penalties for depth picks
+                if (player.position === 'RB' && positionCounts.RB >= 3) {
+                    if (!corePositionsFilled) {
+                        score -= 6;
+                        reasons.push(`4th+ RB before filling core positions`);
+                    } else {
+                        score += 2; // Actually bonus for good depth
+                        reasons.push(`Good RB depth`);
+                    }
+                }
+
+                if (player.position === 'WR' && positionCounts.WR >= 4) {
+                    if (!corePositionsFilled) {
+                        score -= 4;
+                        reasons.push(`5th+ WR before filling core positions`);
+                    } else {
+                        score += 1;
+                        reasons.push(`Good WR depth`);
+                    }
+                }
+
+                // EARLY ROUND STACKING PENALTIES/BONUSES
+                if (currentRound === 4 && firstThreePickPositions.length === 3) {
+                    if (hasThreeEarlyRBs) {
+                        if (player.position === 'WR') {
+                            score += 12;
+                            reasons.push('NEED WR - took 3 RBs early');
+                        } else if (player.position === 'RB') {
+                            score -= 10;
+                            reasons.push('Avoid 4th RB - already took 3 early');
+                        } else if (player.position === 'QB' || player.position === 'TE') {
+                            score -= 6;
+                            reasons.push('Focus on WR after 3 early RBs');
+                        }
+                    }
+
+                    if (hasThreeEarlyWRs) {
+                        if (player.position === 'RB') {
+                            score += 12;
+                            reasons.push('NEED RB - took 3 WRs early');
+                        } else if (player.position === 'WR') {
+                            score -= 10;
+                            reasons.push('Avoid 4th WR - already took 3 early');
+                        } else if (player.position === 'QB') {
+                            score -= 4;
+                            reasons.push('Focus on RB after 3 early WRs');
+                        }
+                    }
+                }
+            }
+
+            // VALUE EXCEPTION: Override stacking rules for major value
+            if (valueGap >= 15) { // Player falling 15+ spots (use existing valueGap from line 1554)
+                if (currentRound === 4) {
+                    if (hasThreeEarlyRBs && (player.position === 'QB' || player.position === 'TE')) {
+                        score += 5; // Reduce penalty for significant value
+                        reasons.push(`Significant value (${valueGap.toFixed(0)} spots)`);
+                    }
+                    if (hasThreeEarlyWRs && player.position === 'QB') {
+                        score += 5;
+                        reasons.push(`Significant value (${valueGap.toFixed(0)} spots)`);
+                    }
+                }
+            }
+
+            return {
+                ...player,
+                suggestionScore: score,
+                suggestionReasons: reasons
+            };
+        });
+
+        // 5. SELECT TOP 1 CANDIDATE (simplified from 3)
+        const topCandidates = scoredCandidates
+            .sort((a, b) => b.suggestionScore - a.suggestionScore)
+            .slice(0, 1); // Take only the top 1 player
+
+        // If we have no candidates, fill with best available player
+        if (topCandidates.length === 0 && availablePlayers.length > 0) {
+            const bestAvailable = availablePlayers
+                .sort((a, b) => (a.adp || 999) - (b.adp || 999)) // Sort by ADP
+                .slice(0, 1);
+
+            topCandidates.push(...bestAvailable.map(player => ({
+                ...player,
+                suggestionScore: 1,
+                suggestionReasons: ['Best available by ADP']
+            })));
+        }
+
+        log('🧠 AI Suggestion calculated:', {
+            currentPick: nextPick,
+            round: currentRound,
+            userTurn: isUserTurn,
+            availablePlayersCount: availablePlayers.length,
+            scoredCandidatesCount: scoredCandidates.length,
+            topCandidate: topCandidates.length > 0 ? {
+                name: topCandidates[0].name,
+                position: topCandidates[0].position,
+                score: topCandidates[0].suggestionScore?.toFixed(1) || 'N/A',
+                reasons: topCandidates[0].suggestionReasons || []
+            } : null
+        });
+
+        return topCandidates;
+    }, [isUserTurn, userTeamPosition, isPaused, isDrafting, nextPick, leagueSize, picks, allPlayers, myRoster, availablePlayers]);
+
+    // Update AI suggestions when relevant data changes
+    useEffect(() => {
+        const suggestions = calculateAISuggestions();
+        console.log('🧠 AI Suggestions Debug Final:', {
+            isUserTurn,
+            userTeamPosition,
+            isPaused,
+            isDrafting,
+            nextPick,
+            allPlayersCount: allPlayers.length,
+            picksCount: picks.length,
+            suggestionsCount: suggestions.length,
+            suggestions: suggestions.map(s => s.name)
+        });
+        setAiSuggestions(suggestions);
+    }, [calculateAISuggestions]);
+
+    // TEMPORARY DEBUG: Force show brackets on top 1 available player when drafting
+    useEffect(() => {
+        if (isDrafting && userTeamPosition && allPlayers.length > 0) {
+            // Get available players (not drafted)
+            const draftedPlayerNames = new Set(picks.map(pick => pick.player).filter(Boolean));
+            const availablePlayers = allPlayers.filter(player => !draftedPlayerNames.has(player.name));
+            const testSuggestion = availablePlayers.slice(0, 1); // Only take 1 player
+            console.log('🧪 Debug: Setting test AI suggestion for drafting:', testSuggestion.map(p => p.name));
+            setAiSuggestions(testSuggestion);
+        } else {
+            setAiSuggestions([]);
+        }
+    }, [isDrafting, userTeamPosition, allPlayers, picks]);
+
     // Main component render
     return (
         <div className="min-h-screen bg-black text-white">
-            {/* YOUR TURN BANNER */}
-            {isUserTurn && (
-                <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 text-black text-center py-3 font-bold animate-pulse">
-                    <div className="flex items-center justify-center space-x-2">
-                        <Clock size={20} />
-                        <span className="text-lg font-mono">YOUR TURN TO DRAFT</span>
-                        <Clock size={20} />
-                    </div>
-                </div>
-            )}
-
             {/* Settings Panel - Compact Header Row */}
-            <div className={`px-4 py-2 border-b border-white/20 ${isUserTurn ? 'mt-16' : ''}`}>
+            <div className="px-4 py-2 border-b border-white/20">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-6">
                         <h3 className="text-sm font-normal" style={{ fontFamily: 'Consolas, monospace' }}>
@@ -1834,7 +2218,17 @@ export default function DraftAssistant() {
                                                         }}
                                                         title="Click to view player details"
                                                     >
-                                                        {player.name}
+                                                        {/* TEMPORARILY DISABLED: Show white brackets around AI suggestions, keep original colors */}
+                                                        {/* Backend AI suggestion logic still runs, but brackets are hidden for now */}
+                                                        {false && isUserTurn && aiSuggestions?.some(suggestion => suggestion.name === player.name) ? (
+                                                            <span>
+                                                                <span className="text-white font-bold">[</span>
+                                                                <span className={getPositionColor(player.position)}>{player.name}</span>
+                                                                <span className="text-white font-bold">]</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className={getPositionColor(player.position)}>{player.name}</span>
+                                                        )}
                                                     </div>
                                                     <div className={`text-xs ${getPositionColor(player.position)}`}>
                                                         {player.position} • {player.team}
