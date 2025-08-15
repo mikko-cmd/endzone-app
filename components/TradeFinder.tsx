@@ -53,6 +53,11 @@ interface TradeFinderData {
   trade_proposals: TradeProposal[];
   team_analyses: TeamAnalysis[];
   total_players_analyzed: number;
+  league_info?: {
+    type: 'dynasty' | 'redraft';
+    keeper_count: number;
+    uses_dynasty_values: boolean;
+  };
   analysis: {
     duration: number;
     week_1_projections: number;
@@ -60,6 +65,7 @@ interface TradeFinderData {
     focus_team?: string;
     fairness_threshold: number;
   };
+  methodology?: string;
 }
 
 interface TradeFinderProps {
@@ -89,6 +95,14 @@ export default function TradeFinder({ leagueId }: TradeFinderProps) {
 
       if (result.success) {
         setData(result.data);
+
+        // Dynasty detection logging and console feedback
+        if (result.data.league_info?.type === 'dynasty') {
+          console.log('🏆 Using Dynasty Rankings - Youth & Longevity Valued');
+          console.log(`📊 Keeper Count: ${result.data.league_info.keeper_count}`);
+        } else {
+          console.log('📊 Using Redraft Rankings - Current Season Focus');
+        }
       } else {
         throw new Error(result.error || 'Unknown error');
       }

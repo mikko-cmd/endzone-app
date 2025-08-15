@@ -8,6 +8,8 @@ interface ProjectionData {
     team: string;
     longName: string;
     playerID: string;
+    age?: number;        // Add age property
+    years_exp?: number;  // Add years experience property
     adp_rank?: number;
     fantasyPointsDefault?: {
         standard?: string;
@@ -36,6 +38,15 @@ interface SleeperLeagueSettings {
     scoring_settings: { [key: string]: number };
     num_teams: number;
     playoff_week_start: number;
+    type: number; // 0 = redraft, 1 = dynasty
+    season: string;
+    status: string;
+    settings: {
+        keeper_count?: number;
+        draft_type?: number;
+        max_keepers?: number;
+        [key: string]: any;
+    };
 }
 
 interface TeamAnalysis {
@@ -149,15 +160,179 @@ async function getSeasonProjections(): Promise<{ [playerName: string]: number }>
     }
 }
 
-// Calculate Endzone Value (0-1000) based on projection ranking
-function calculateEndzoneValue(projectedPoints: number, allProjections: number[]): number {
+// Calculate Endzone Value with position-specific, QB tier-based, and age-based scaling
+function calculateEndzoneValue(projectedPoints: number, allProjections: number[], position: string, playerName?: string, leagueSettings?: SleeperLeagueSettings, playerAge?: number): number {
     if (projectedPoints <= 0) return 0;
 
     const validProjections = allProjections.filter(p => p > 0).sort((a, b) => b - a);
     const playerRank = validProjections.findIndex(p => p <= projectedPoints) + 1;
 
     // Convert rank to 0-1000 scale (1000 = #1 overall)
-    return Math.round((validProjections.length - playerRank + 1) / validProjections.length * 1000);
+    let baseValue = Math.round((validProjections.length - playerRank + 1) / validProjections.length * 1000);
+
+    // Apply QB tier-based scaling
+    if (position === 'QB' && playerName) {
+        const qbTiers = {
+            // S Tier QBs: 7% decrease
+            sTier: {
+                multiplier: 0.93,
+                players: ['josh allen', 'lamar jackson', 'jalen hurts', 'jayden daniels']
+            },
+            // A Tier QBs: 9% decrease  
+            aTier: {
+                multiplier: 0.91,
+                players: ['joe burrow', 'patrick mahomes']
+            },
+            // Mid Tier QBs: 13% decrease
+            midTier: {
+                multiplier: 0.87,
+                players: ['baker mayfield', 'jared goff', 'kyler murray', 'bo nix', 'justin herbert', 'brock purdy']
+            },
+            // Meh Tier QBs: 20% decrease
+            mehTier: {
+                multiplier: 0.80,
+                players: ['dak prescott', 'cj stroud', 'caleb williams', 'jordan love', 'drake maye', 'jj mccarthy', 'trevor lawrence', 'sam darnold']
+            },
+            // Poop Tier QBs: 35% decrease
+            poopTier: {
+                multiplier: 0.65,
+                players: ['michael penix', 'bryce young', 'matthew stafford', 'tua tagovailoa', 'aaron rodgers', 'geno smith', 'justin fields', 'cameron ward', 'russell wilson', 'jaxson dart', 'anthony richardson']
+            }
+        };
+
+        const cleanPlayerName = playerName.toLowerCase().trim();
+
+        // Check each tier for matches
+        for (const tier of Object.values(qbTiers)) {
+            for (const qbName of tier.players) {
+                if (cleanPlayerName.includes(qbName) || qbName.includes(cleanPlayerName.split(' ')[0])) {
+                    baseValue = Math.round(baseValue * tier.multiplier);
+                    console.log(`[QB Tier] ${playerName} matched ${qbName} with ${tier.multiplier} multiplier: ${baseValue} EV`);
+                    break;
+                }
+            }
+            if (baseValue !== Math.round((validProjections.length - playerRank + 1) / validProjections.length * 1000)) break;
+        }
+
+        // If no tier match found, apply poop tier (35% decrease) as default
+        if (baseValue === Math.round((validProjections.length - playerRank + 1) / validProjections.length * 1000)) {
+            baseValue = Math.round(baseValue * 0.65);
+            console.log(`[QB Tier] ${playerName} no tier match - applying poop tier: ${baseValue} EV`);
+        }
+    } else {
+        // Apply standard position multipliers for non-QBs
+        const positionMultipliers = {
+            'RB': 0.94,   // Decrease RB values by 6%
+            'WR': 1.0,    // Keep WR values as baseline
+            'TE': 0.98,   // Slight decrease for TEs
+            'K': 0.3,     // Keep kicker reduction
+            'DEF': 0.4,   // Keep defense reduction
+            'FLEX': 1.0   // Keep FLEX as baseline
+        };
+
+        const multiplier = positionMultipliers[position as keyof typeof positionMultipliers] || 1.0;
+        baseValue = Math.round(baseValue * multiplier);
+    }
+
+    // Apply age-based adjustments for BOTH dynasty and redraft leagues
+    const isDynasty = leagueSettings?.roster_positions?.includes('SUPER_FLEX');
+    const ageMultiplier = getAgeMultiplier(position, playerAge, playerName, isDynasty);
+    baseValue = Math.round(baseValue * ageMultiplier);
+
+    if (ageMultiplier !== 1.0 && playerName && playerAge) {
+        const leagueType = isDynasty ? 'Dynasty' : 'Redraft';
+        console.log(`[${leagueType} Age] ${playerName} (${position}, age ${playerAge}): ${Math.round(baseValue / ageMultiplier)} → ${baseValue} EV (${ageMultiplier}x multiplier)`);
+    }
+
+    // Apply dynasty position adjustments (separate from age)
+    if (isDynasty) {
+        const dynastyPositionMultiplier = getDynastyPositionMultiplier(position);
+        baseValue = Math.round(baseValue * dynastyPositionMultiplier);
+
+        if (dynastyPositionMultiplier !== 1.0 && playerName) {
+            console.log(`[Dynasty Position] ${playerName} (${position}): ${Math.round(baseValue / dynastyPositionMultiplier)} → ${baseValue} EV (${dynastyPositionMultiplier}x multiplier)`);
+        }
+    }
+
+    return Math.max(0, baseValue);
+}
+
+// Age-based multiplier for both dynasty and redraft (redraft = 50% of dynasty impact)
+function getAgeMultiplier(position: string, playerAge?: number, playerName?: string, isDynasty: boolean = false): number {
+    if (!playerAge || playerAge <= 0) return 1.0;
+
+    let ageMultiplier = 1.0;
+    const impactMultiplier = isDynasty ? 1.0 : 0.5; // Redraft gets 50% of dynasty age impact
+
+    if (position === 'RB') {
+        // RBs peak early, decline sharply after 28
+        if (playerAge <= 24) ageMultiplier = 1.0 + (0.15 * impactMultiplier);      // Dynasty: +15%, Redraft: +7.5%
+        else if (playerAge <= 26) ageMultiplier = 1.0 + (0.05 * impactMultiplier); // Dynasty: +5%, Redraft: +2.5%
+        else if (playerAge <= 28) ageMultiplier = 1.0;                             // No change
+        else if (playerAge <= 30) ageMultiplier = 1.0 - (0.15 * impactMultiplier); // Dynasty: -15%, Redraft: -7.5%
+        else ageMultiplier = 1.0 - (0.3 * impactMultiplier);                      // Dynasty: -30%, Redraft: -15%
+    } else if (position === 'WR') {
+        // WRs have longer careers but still decline after 30
+        if (playerAge <= 25) ageMultiplier = 1.0 + (0.1 * impactMultiplier);       // Dynasty: +10%, Redraft: +5%
+        else if (playerAge <= 28) ageMultiplier = 1.0 + (0.05 * impactMultiplier); // Dynasty: +5%, Redraft: +2.5%
+        else if (playerAge <= 30) ageMultiplier = 1.0;                             // No change
+        else if (playerAge <= 32) ageMultiplier = 1.0 - (0.1 * impactMultiplier);  // Dynasty: -10%, Redraft: -5%
+        else ageMultiplier = 1.0 - (0.25 * impactMultiplier);                     // Dynasty: -25%, Redraft: -12.5%
+    } else if (position === 'TE') {
+        // TEs peak later, longer careers
+        if (playerAge <= 26) ageMultiplier = 1.0 + (0.08 * impactMultiplier);      // Dynasty: +8%, Redraft: +4%
+        else if (playerAge <= 30) ageMultiplier = 1.0 + (0.05 * impactMultiplier); // Dynasty: +5%, Redraft: +2.5%
+        else if (playerAge <= 32) ageMultiplier = 1.0;                             // No change
+        else ageMultiplier = 1.0 - (0.1 * impactMultiplier);                      // Dynasty: -10%, Redraft: -5%
+    } else if (position === 'QB') {
+        // QBs have longest careers, peak in late 20s/early 30s
+        if (playerAge <= 26) ageMultiplier = 1.0 + (0.12 * impactMultiplier);      // Dynasty: +12%, Redraft: +6%
+        else if (playerAge <= 30) ageMultiplier = 1.0 + (0.08 * impactMultiplier); // Dynasty: +8%, Redraft: +4%
+        else if (playerAge <= 34) ageMultiplier = 1.0;                             // No change
+        else ageMultiplier = 1.0 - (0.15 * impactMultiplier);                     // Dynasty: -15%, Redraft: -7.5%
+    }
+
+    return ageMultiplier;
+}
+
+// Dynasty position multipliers (separate from age)
+function getDynastyPositionMultiplier(position: string): number {
+    const dynastyMultipliers = {
+        'QB': 1.15, // QBs have longer careers, bigger boost in dynasty
+        'RB': 0.9,  // RBs have shorter careers, less valuable in dynasty
+        'WR': 1.02, // WRs slight boost, but dampened
+        'TE': 1.1,  // TEs have long careers, premium in dynasty
+        'K': 1.0,   // Neutral
+        'DEF': 1.0  // Neutral
+    };
+
+    return dynastyMultipliers[position as keyof typeof dynastyMultipliers] || 1.0;
+}
+
+// Detect league type and adjust values accordingly
+function getLeagueTypeMultiplier(leagueSettings: SleeperLeagueSettings, position: string): number {
+    const isDynasty = leagueSettings?.roster_positions?.includes('SUPER_FLEX');
+
+    if (isDynasty) {
+        // Dynasty leagues value youth and long-term potential more
+        const dynastyMultipliers = {
+            'QB': 1.15, // QBs have longer careers, bigger boost in dynasty
+            'RB': 0.9,  // RBs have shorter careers, less valuable in dynasty
+            'WR': 1.02, // WRs slight boost, but dampened
+            'TE': 1.1,  // TEs have long careers, premium in dynasty
+            'K': 1.0,   // Neutral
+            'DEF': 1.0  // Neutral
+        };
+
+        let baseMultiplier = dynastyMultipliers[position as keyof typeof dynastyMultipliers] || 1.0;
+
+        // Apply age-based adjustments for dynasty (if age data available)
+        // This will be passed as a parameter
+        return baseMultiplier;
+    }
+
+    // Redraft leagues - standard multipliers
+    return 1.0;
 }
 
 // Main GET Function
@@ -211,6 +386,33 @@ export async function GET(request: NextRequest, { params }: { params: { leagueId
         const rosters = await rostersResponse.json();
         const users = await usersResponse.json();
         const leagueSettings: SleeperLeagueSettings = await leagueResponse.json();
+
+        // DEBUG: Log the entire league response to see what fields are available
+        console.log(`[League Debug] Full league object keys:`, Object.keys(leagueSettings));
+        console.log(`[League Debug] League settings sample:`, {
+            type: leagueSettings.type,
+            settings: leagueSettings.settings,
+            draft_type: (leagueSettings as any).draft_type,
+            total_rosters: (leagueSettings as any).total_rosters,
+            league_type: (leagueSettings as any).league_type,
+            dynasty: (leagueSettings as any).dynasty,
+            keeper: (leagueSettings as any).keeper
+        });
+
+        // Specifically check roster positions for Superflex
+        console.log(`[League Debug] Roster positions:`, leagueSettings.roster_positions);
+        console.log(`[League Debug] Has SUPER_FLEX:`, leagueSettings.roster_positions?.includes('SUPER_FLEX'));
+        console.log(`[League Debug] Has SUPERFLEX:`, leagueSettings.roster_positions?.includes('SUPERFLEX'));
+
+        // Simple and reliable dynasty detection - Superflex = Dynasty
+        const hasSuperflex = leagueSettings.roster_positions.includes('SUPER_FLEX');
+        const isDynasty = hasSuperflex;
+
+        console.log(`[League Type] League ${params.leagueId} detection:`);
+        console.log(`[League Type] - Roster positions: ${leagueSettings.roster_positions.join(', ')}`);
+        console.log(`[League Type] - Has SUPER_FLEX: ${hasSuperflex}`);
+        console.log(`[League Type] - Status: ${leagueSettings.status}`);
+        console.log(`[League Type] - Final classification: ${isDynasty ? 'DYNASTY' : 'REDRAFT'}`);
 
         // Get projections
         const [sleeperPlayers, seasonProjections] = await Promise.all([
@@ -277,6 +479,11 @@ export async function GET(request: NextRequest, { params }: { params: { leagueId
             success: true,
             data: {
                 trade_proposals: allTrades,
+                league_info: {
+                    type: isDynasty ? 'dynasty' : 'redraft',
+                    keeper_count: leagueSettings.settings?.keeper_count || 0,
+                    uses_dynasty_values: isDynasty
+                },
                 total_players_analyzed: enhancedTeams.reduce((sum, team) => sum + team.players.length, 0),
                 team_analyses: enhancedTeams.map(t => ({
                     team_id: t.owner_id,
@@ -294,7 +501,7 @@ export async function GET(request: NextRequest, { params }: { params: { leagueId
                     starter_slots: userTeam.starter_slots,
                     bench_depth: userTeam.bench_depth
                 },
-                methodology: 'best_available_trades'
+                methodology: isDynasty ? 'dynasty_optimized_trades' : 'redraft_optimized_trades'
             }
         });
 
@@ -354,6 +561,8 @@ async function getSleeperPlayers(): Promise<{ [playerId: string]: ProjectionData
                     pos: player.position || player.fantasy_positions?.[0] || 'FLEX',
                     team: player.team || 'FA',
                     playerID: playerId,
+                    age: player.age,  // Add age from Sleeper
+                    years_exp: player.years_exp,  // Add experience 
                     fantasyPointsDefault: { standard: '0', PPR: '0', halfPPR: '0' }
                 };
             }
@@ -391,7 +600,7 @@ async function enhanceTeamsWithProjections(
             // Match by name instead of ID
             const playerName = playerData?.longName?.toLowerCase();
             const projectedPoints = playerName ? (seasonProjections[playerName] || 0) : 0;
-            const endzoneValue = calculateEndzoneValue(projectedPoints, allProjectionValues);
+            const endzoneValue = calculateEndzoneValue(projectedPoints, allProjectionValues, playerData?.pos || 'FLEX', playerData?.longName, leagueSettings, playerData?.age);
 
             return {
                 player_id: playerId,
@@ -579,6 +788,82 @@ function generate3v3Trades(userTeam: TeamAnalysis, otherTeam: TeamAnalysis): Tra
     return trades.slice(0, 5); // Limit to best 5
 }
 
+// Enhanced contextual reasoning
+function generateContextualAnalysis(
+    userTeam: TeamAnalysis,
+    userGiving: any[],
+    userReceiving: any[],
+    tradeType: string,
+    netValue: number
+): string[] {
+    const analysis: string[] = [];
+
+    // Analyze positional impact
+    const positionsGiven = Array.from(new Set(userGiving.map((p: any) => p.position)));
+    const positionsReceived = Array.from(new Set(userReceiving.map((p: any) => p.position)));
+
+    // Check for position gaps and depth
+    for (const position of positionsGiven) {
+        const remainingAtPosition = userTeam.players.filter(p =>
+            p.position === position &&
+            !userGiving.find(given => given.player_id === p.player_id)
+        );
+
+        if (remainingAtPosition.length > 0) {
+            const bestBackup = remainingAtPosition.sort((a, b) => (b.endzone_value || 0) - (a.endzone_value || 0))[0];
+
+            if (position === 'QB' && userGiving.length > 0) {
+                analysis.push(`• Yes, you lose ${userGiving.find(p => p.position === 'QB')?.name}. But your backup QB ${bestBackup.name} is ready to step up and provide solid production.`);
+            } else if (remainingAtPosition.length >= 2) {
+                analysis.push(`• Strong ${position} depth remains with ${bestBackup.name} leading your ${position} corps.`);
+            }
+        } else if (positionsGiven.includes(position) && !positionsReceived.includes(position)) {
+            analysis.push(`• ⚠️ Warning: This trade creates a gap at ${position} - consider your waiver wire options.`);
+        }
+    }
+
+    // Analyze what you're gaining
+    if (positionsReceived.length > 0) {
+        const positionGroups = positionsReceived.reduce((acc: any, pos) => {
+            acc[pos] = (acc[pos] || 0) + 1;
+            return acc;
+        }, {});
+
+        Object.entries(positionGroups).forEach(([pos, count]) => {
+            if (count === 1) {
+                const receivedPlayer = userReceiving.find(p => p.position === pos);
+                analysis.push(`• This trade adds ${receivedPlayer?.name} to strengthen your ${pos} position.`);
+            } else {
+                analysis.push(`• This trade supercharges your ${pos} room with ${count} quality additions for more flexibility.`);
+            }
+        });
+    }
+
+    // Add strategic context for multi-player trades
+    if (tradeType.includes('3v3') || tradeType.includes('2v2')) {
+        if (netValue > 0) {
+            analysis.push(`• Multi-player trades like this create roster flexibility and allow for future trade opportunities.`);
+        }
+
+        // Check for potential roster cloggers
+        const lowerValuePlayers = userGiving.filter(p => (p.endzone_value || 0) < 600);
+        if (lowerValuePlayers.length > 0) {
+            analysis.push(`• Clearing ${lowerValuePlayers.map(p => p.name).join(' and ')} from your roster opens up valuable bench spots.`);
+        }
+    }
+
+    // Add net value context
+    if (netValue > 50) {
+        analysis.push(`• Excellent value gain: +${netValue} EV puts you ahead in this trade.`);
+    } else if (netValue > 0) {
+        analysis.push(`• Solid value: +${netValue} EV while improving roster construction.`);
+    } else if (netValue === 0) {
+        analysis.push(`• Even trade value-wise, but consider the strategic roster improvements.`);
+    }
+
+    return analysis;
+}
+
 // Simplified trade creation
 function createEndzoneValueTrade(
     teamA: TeamAnalysis, teamAGiving: any[], teamAReceiving: any[],
@@ -592,20 +877,8 @@ function createEndzoneValueTrade(
 
     const fairnessScore = Math.min(teamAValue, teamBValue) / Math.max(teamAValue, teamBValue);
 
-    // Simplified reasoning
-    let reasoning: string[];
-    if (teamAGiving.length > 1) {
-        reasoning = [
-            `Multi-player trade: ${teamAGiving.length}v${teamBGiving.length}`,
-            `Trade fairness: ${(fairnessScore * 100).toFixed(1)}%`,
-            `Net gain: +${teamBValue - teamAValue} EV`
-        ];
-    } else {
-        reasoning = [
-            `Trade fairness: ${(fairnessScore * 100).toFixed(1)}%`,
-            `Net gain: +${teamBValue - teamAValue} EV`
-        ];
-    }
+    // Simplified reasoning - no analysis bullet points for now
+    let reasoning: string[] = []; // Empty array - no analysis
 
     return {
         trade_id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
